@@ -47,7 +47,7 @@ are experimental: comparison benchmarks are required before quantifying savings.
 
 ## Build and checks
 
-Source: `H:\zhopa\untitled14`
+Source: `H:\zhopa\MBrowser`
 Installer: `installer/MBrowser.iss`
 Windows x64, .NET 10, CEF 154.0.34 and CefSharp 154.0.340.
 

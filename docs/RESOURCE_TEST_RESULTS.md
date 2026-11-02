@@ -1,6 +1,6 @@
 # MBrowser memory-resource changes: local verification
 
-Date: 2026-10-25. Device: Windows x64, project `H:\zhopa\untitled14`.
+Date: 2026-10-25. Device: Windows x64, project `H:\zhopa\MBrowser`.
 
 - Debug build: SUCCESS, 0 compiler warnings, 0 errors.
 - Release build: SUCCESS, 0 compiler warnings, 0 errors.

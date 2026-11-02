@@ -1,5 +1,5 @@
 param(
-    [string]$App = 'H:\zhopa\untitled14\dist\MBrowser.exe',
+    [string]$App = (Join-Path $PSScriptRoot '..\dist\MBrowser.exe'),
     [switch]$Legacy
 )
 $ErrorActionPreference = 'Stop'

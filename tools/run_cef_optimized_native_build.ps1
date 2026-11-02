@@ -12,7 +12,7 @@ if (!(Test-Path $pythonExe)) { throw "Bundled Chromium Python3 was not found: $p
 $env:PATH = $pythonDir + [IO.Path]::PathSeparator + $env:PATH
 & $pythonExe --version
 if ($LASTEXITCODE -ne 0) { throw 'Chromium bundled Python failed to start.' }
-$artifacts = 'H:\zhopa\untitled14\artifacts'
+$artifacts = Join-Path $PSScriptRoot '..\artifacts'
 $stdout = Join-Path $artifacts 'cef154-optimized-native-build.log'
 $stderr = Join-Path $artifacts 'cef154-optimized-native-build-errors.log'
 $status = Join-Path $artifacts 'cef154-optimized-native-build-status.txt'

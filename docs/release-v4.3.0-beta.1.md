@@ -31,4 +31,4 @@ bookmarks, cookies and session files are not deleted. This installer uses the
 
 `MBrowser.exe --webview2` opens the previous engine for compatibility.
 
-See [technical details](https://github.com/MIGLEcorp/untitled14/blob/main/docs/CEF_4_3_BETA.md).
+See [technical details](https://github.com/MIGLEcorp/MBrowser/blob/main/docs/CEF_4_3_BETA.md).

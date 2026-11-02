@@ -1,5 +1,5 @@
 $ErrorActionPreference='Stop'
-$root='H:\zhopa\untitled14'
+$root=$PSScriptRoot
 Set-Location $root
 $exe=Join-Path $root 'bin\x64\Debug\net10.0-windows\MBrowser.exe'
 $core=Start-Process -FilePath $exe -ArgumentList '--self-test' -WorkingDirectory $root -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput 'resource-core-results.txt' -RedirectStandardError 'resource-core-errors.txt'
