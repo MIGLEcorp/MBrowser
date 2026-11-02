@@ -30,6 +30,29 @@ public static class CoreTests
         {
             ThemeTests.RunCore(Check, folder);
             BrowserIntegrationTests.RunCore(Check,folder);
+            Check("CEF stale frame during FrameLoadEnd cannot terminate the host", () =>
+            {
+                bool injected = false;
+                int reported = 0;
+                Action<Exception> report = _ => reported++;
+                Assert(!CefFrameLoadGuard.TryRun(() => false, () => injected = true, report),
+                    "An invalid frame should never receive scripts");
+                Assert(!injected && reported == 0, "An invalid frame was used or logged");
+                Assert(!CefFrameLoadGuard.TryRun(() => true,
+                    () => throw new Exception("The underlying frame is no longer valid - please check the IsValid property before calling!"),
+                    report), "A stale frame must be ignored");
+                Assert(!CefFrameLoadGuard.TryRun(
+                    () => throw new ObjectDisposedException("frame"),
+                    () => injected = true, report), "Disposed frames must be ignored");
+                Assert(reported == 0, "Routine navigation races should not be reported");
+                Assert(!CefFrameLoadGuard.TryRun(() => true,
+                    () => throw new InvalidOperationException("unexpected scripting error"),
+                    report), "Unexpected failures must not escape the callback");
+                Assert(reported == 1, "Unexpected scripting errors must be logged");
+                Assert(CefFrameLoadGuard.TryRun(() => true,
+                    () => injected = true, report) && injected,
+                    "Valid frames must still receive scripts");
+            });
             Check("Tab strip restores hidden tabs when overflow arrows disappear", () =>
             {
                 using var strip = new TabStrip { Width = 820 };

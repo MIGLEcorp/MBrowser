@@ -71,7 +71,7 @@ internal sealed partial class MainForm
                 if (!IsHandleCreated || IsDisposed) return;
                 BeginInvoke(() => { if (CefIsAlive(runtime)) update(); });
             }
-            catch (InvalidOperationException) { }
+            catch (InvalidOperationException) { } // Also covers ObjectDisposedException.
         }
 
         browser.LoadingStateChanged += (_, e) => OnUi(() =>
@@ -126,29 +126,39 @@ internal sealed partial class MainForm
         });
         browser.FrameLoadStart += (_, e) =>
         {
-            if (!e.Frame.IsMain) return;
-            Interlocked.Increment(ref runtime.NavigationEpoch);
-            runtime.MainFrameReady = false;
-            runtime.OptimizationsScheduledEpoch = -1;
-            runtime.MainFrameStartedTimestamp = Stopwatch.GetTimestamp();
-            if (runtime.NavigationHandler.ResourceTracingEnabled)
-                _ = LogPendingResourcesAfterDelayAsync(runtime);
+            // FrameLoadStart can also race with a renderer/frame teardown.
+            CefFrameLoadGuard.TryRun(
+                () => e.Frame.IsValid && e.Frame.IsMain,
+                () =>
+                {
+                    Interlocked.Increment(ref runtime.NavigationEpoch);
+                    runtime.MainFrameReady = false;
+                    runtime.OptimizationsScheduledEpoch = -1;
+                    runtime.MainFrameStartedTimestamp = Stopwatch.GetTimestamp();
+                    if (runtime.NavigationHandler.ResourceTracingEnabled)
+                        _ = LogPendingResourcesAfterDelayAsync(runtime);
+                },
+                error => Program.LogError(DataPath, error));
             // Do not mutate the page or scan its DOM before content is ready.
         };
         // FrameLoadStart can precede V8 context creation; retry after load.
         browser.FrameLoadEnd += (_, e) =>
         {
-            if (!e.Frame.IsMain) return;
-            try
-            {
-                // Credential prompts and edit safety are independent of the
-                // optional memory policies and must still work during login.
-                e.Frame.ExecuteJavaScriptAsync(AutofillPageScripts.CefObserver);
-                e.Frame.ExecuteJavaScriptAsync(TabHibernationManager.ActivityTrackerScript);
-                if (tab.ScrollX > 0 || tab.ScrollY > 0)
-                    e.Frame.ExecuteJavaScriptAsync("scrollTo(" + tab.ScrollX.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + tab.ScrollY.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")");
-            }
-            catch (ObjectDisposedException) { }
+            // CefFrameWrapper.ExecuteJavaScriptAsync can throw a *plain*
+            // System.Exception when a navigation replaces the frame between
+            // the IsValid check and the script call. Do not crash the host.
+            if (!CefFrameLoadGuard.TryRun(
+                () => e.Frame.IsValid && e.Frame.IsMain,
+                () =>
+                {
+                    // Login and edit safety are independent of memory policies.
+                    e.Frame.ExecuteJavaScriptAsync(AutofillPageScripts.CefObserver);
+                    e.Frame.ExecuteJavaScriptAsync(TabHibernationManager.ActivityTrackerScript);
+                    if (tab.ScrollX > 0 || tab.ScrollY > 0)
+                        e.Frame.ExecuteJavaScriptAsync("scrollTo(" + tab.ScrollX.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + tab.ScrollY.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")");
+                },
+                error => Program.LogError(DataPath, error)))
+                return;
             int completedEpoch = Volatile.Read(ref runtime.NavigationEpoch);
             var frameElapsed = runtime.MainFrameStartedTimestamp == 0
                 ? TimeSpan.Zero : Stopwatch.GetElapsedTime(runtime.MainFrameStartedTimestamp);
