@@ -12,6 +12,16 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // Run Chromium renderers, GPU and utility workers through MBrowser.exe.
+        // Keep their OS process identity and AppUserModelID aligned with the
+        // main browser instead of launching CefSharp.BrowserSubprocess.exe.
+        // CEF still uses separate, sandboxed processes per site/service.
+        if (args.Any(arg => arg.StartsWith("--type=", StringComparison.Ordinal)))
+        {
+            SetCurrentProcessExplicitAppUserModelID("MIGLEcorp.MBrowser");
+            return CefSharp.BrowserSubprocess.SelfHost.Main(args);
+        }
+
         // Inno /TESTMODE installations use a private profile and mutex.
         bool isolatedInstall = Directory.Exists(Path.Combine(
             AppContext.BaseDirectory, "_MBrowser_TestProfileOnly"));
@@ -180,7 +190,13 @@ internal static class Program
             var cefSettings = new CefSharp.WinForms.CefSettings
             {
                 RootCachePath = cefRoot,
-                CachePath = cefCache
+                CachePath = cefCache,
+                // Self-host workers as MBrowser.exe so Task Manager can identify
+                // them consistently with the parent app. This is not a
+                // single-process switch; normal Chromium isolation remains.
+                BrowserSubprocessPath = Path.Combine(AppContext.BaseDirectory,
+                    Environment.GetEnvironmentVariable("MBROWSER_LEGACY_CEF_SUBPROCESS") == "1"
+                        ? "CefSharp.BrowserSubprocess.exe" : "MBrowser.exe")
             };
             if (chromeRuntimeSmoke)
                 CefSharp.CefSharpSettings.RuntimeStyle = CefSharp.CefRuntimeStyle.Chrome;
@@ -226,7 +242,8 @@ internal static class Program
             var startupWatch = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                if (!CefSharp.Cef.Initialize(cefSettings))
+                if (!CefSharp.Cef.Initialize(cefSettings,
+                    performDependencyCheck: false, browserProcessHandler: null))
                     throw new InvalidOperationException("Chromium CEF failed to initialize.");
                 if (!cefSmoke)
                 {
