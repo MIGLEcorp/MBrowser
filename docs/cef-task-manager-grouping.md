@@ -20,6 +20,8 @@ of the same application. **Windows Task Manager controls its own UI grouping**:
 a single expandable app group in the Processes tab is a desired outcome,
 not a documented guarantee; the Details tab will still show multiple PIDs.
 
+The special `--cef-face-detection-smoke` mode uses stock CefSharp workers because the experimental WinRT FaceDetector can stall under SelfHost on this Windows build; normal browsing still uses grouped MBrowser workers.
+
 To revert to stock CefSharp worker processes if a regression is found, set
 `MBROWSER_LEGACY_CEF_SUBPROCESS=1` before starting MBrowser, then restart it.
 The original CefSharp.BrowserSubprocess.exe is still included.

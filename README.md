@@ -2,6 +2,8 @@
 
 ## MBrowser 4.4.0 — Stable Chromium CEF 154
 
+[Сравнение скорости с Google Chrome](docs/chrome-comparison-v4.4.0.md).
+
 Стабильный выпуск **полностью удаляет Microsoft WebView2 из основного EXE**.
 Chromium CEF 154 теперь обрабатывает вкладки, загрузки, разрешения, куки,
 автозаполнение, расширения и перевод. Отдельный WebKit/Playwright helper

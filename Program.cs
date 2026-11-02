@@ -195,6 +195,11 @@ internal static class Program
                 // them consistently with the parent app. This is not a
                 // single-process switch; normal Chromium isolation remains.
                 BrowserSubprocessPath = Path.Combine(AppContext.BaseDirectory,
+                    // Chromium's experimental WinRT FaceDetector can stall
+                    // under CefSharp SelfHost on this Windows build. Restrict
+                    // the fallback to that smoke mode; real tabs retain the
+                    // normal grouped MBrowser.exe process identity.
+                    faceDetectionSmoke ||
                     Environment.GetEnvironmentVariable("MBROWSER_LEGACY_CEF_SUBPROCESS") == "1"
                         ? "CefSharp.BrowserSubprocess.exe" : "MBrowser.exe")
             };
