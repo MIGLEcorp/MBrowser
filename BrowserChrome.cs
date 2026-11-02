@@ -168,6 +168,7 @@ internal sealed class TabStrip : Control
             var close = new Rectangle(bounds.Right - 28, bounds.Top + 6, 22, 22);
             bool active = index == SelectedIndex;
             using var shape = RoundedRectangle(bounds, 9);
+            // Idle OLED tabs do not light grey pixels; accent underline identifies the active tab.
             using var brush = new SolidBrush(active ? Palette.Raised : Palette.Surface);
             g.FillPath(brush, shape);
             bool anime = false;

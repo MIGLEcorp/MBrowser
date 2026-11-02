@@ -27,7 +27,8 @@ internal static class ThemeSettings
     {
         [BrowserTheme.Anime] = new(Color.FromArgb(21,19,35), Color.FromArgb(32,28,49), Color.FromArgb(48,41,68),
             Color.FromArgb(249,243,252), Color.FromArgb(180,168,199), Color.FromArgb(242,176,210), Color.FromArgb(34,27,56)),
-        [BrowserTheme.Dark] = new(Color.Black, Color.FromArgb(13,13,13), Color.FromArgb(32,32,32),
+        // Every non-interactive OLED surface is exactly #000000; no grey panels or address bar.
+        [BrowserTheme.Dark] = new(Color.Black, Color.Black, Color.Black,
             Color.FromArgb(245,245,245), Color.FromArgb(162,162,162), Color.FromArgb(183,136,255), Color.Black),
         [BrowserTheme.Light] = new(Color.FromArgb(250,250,250), Color.White, Color.FromArgb(231,231,235),
             Color.FromArgb(28,28,32), Color.FromArgb(105,105,112), Color.FromArgb(110,60,190), Color.White)

@@ -13,6 +13,35 @@ internal static class ThemeTests
     {
         string profile = Path.Combine(folder, "theme-profile");
         Directory.CreateDirectory(profile);
+        check("AMOLED preset paints every idle browser surface pure black", () =>
+        {
+            var original = ThemeSettings.Document;
+            try
+            {
+                ThemeSettings.Preview(ThemeSettings.Preset(BrowserTheme.Dark));
+                var colors = ThemeSettings.Colors;
+                Assert(colors.Background.ToArgb() == Color.Black.ToArgb() &&
+                    colors.Surface.ToArgb() == Color.Black.ToArgb() &&
+                    colors.Raised.ToArgb() == Color.Black.ToArgb(), "OLED background, panels or fields emit grey pixels");
+
+                using var canvas = new Bitmap(90, 50);
+                foreach (var area in new[] { ThemeArea.Home, ThemeArea.Chrome, ThemeArea.Menu })
+                {
+                    using var graphics = Graphics.FromImage(canvas);
+                    using var owner = new Panel { Size = canvas.Size };
+                    graphics.Clear(Color.White);
+                    ThemeMedia.Draw(graphics, new Rectangle(0, 0, 90, 50), area, owner);
+                    Assert(canvas.GetPixel(45, 25).ToArgb() == Color.Black.ToArgb(),
+                        "Unmodified " + area + " surface is not true black");
+                }
+                using var tab = new TabStrip { Width = 360, Height = 48 };
+                using var snapshot = new Bitmap(360, 48);
+                tab.DrawToBitmap(snapshot, new Rectangle(Point.Empty, snapshot.Size));
+                Assert(snapshot.GetPixel(1, 1).ToArgb() == Color.Black.ToArgb(),
+                    "Tab strip background is grey");
+            }
+            finally { ThemeSettings.Preview(original); }
+        });
         check("Theme colors, unified header and image transforms survive a reload", () =>
         {
             ThemeSettings.Load(profile);

@@ -50,7 +50,13 @@ internal sealed class RoundedButton : Button
         base.OnPaintBackground(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         using var shape = TabStrip.RoundedRectangle(new Rectangle(1, 1, Width - 3, Height - 3), 11);
-        using var fill = new SolidBrush(BackColor.A == 0 ? Color.FromArgb(80 + (int)(85*_hover), Palette.Surface) : UiMotion.Blend(BackColor,Palette.Raised,_hover));
+        // On true black OLED, hover must remain visible even when the normal surface and raised colors match.
+        Color baseFill = BackColor.A == 0 ? Palette.Surface : BackColor;
+        Color hovered = Palette.Background.ToArgb() == Color.Black.ToArgb() &&
+            Palette.Surface.ToArgb() == Color.Black.ToArgb() && Palette.Raised.ToArgb() == Color.Black.ToArgb()
+                ? UiMotion.Blend(Color.Black, Palette.Accent, 0.24f)
+                : Palette.Raised;
+        using var fill = new SolidBrush(UiMotion.Blend(baseFill, hovered, _hover));
         e.Graphics.FillPath(fill, shape);
         var textArea = Width <= 50 ? ClientRectangle : new Rectangle(8, 0, Width - 16, Height);
         if (IconKey.Length > 0 &&
