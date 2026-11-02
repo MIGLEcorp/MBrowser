@@ -94,8 +94,9 @@ internal static class Program
         // CEF-only: WebView2 has been removed from the production executable.
         bool chromeRuntimeSmoke = args.Length == 1 && args[0] == "--cef-chrome-runtime-smoke";
         bool urlSmokeNoQuic = args.Length == 2 && args[0] == "--cef-url-smoke-noquic";
+        bool videoSmoke = args.Length == 2 && args[0] == "--cef-video-smoke";
         bool urlSmoke = args.Length == 2 &&
-            (args[0] == "--cef-url-smoke" || urlSmokeNoQuic);
+            (args[0] == "--cef-url-smoke" || urlSmokeNoQuic || videoSmoke);
         bool faceDetectionSmoke = args.Length == 1 && args[0] == "--cef-face-detection-smoke";
         bool delayedOptimizationSmoke = args.Length == 1 && args[0] == "--cef-delayed-optimization-smoke";
         bool credentialSmoke = args.Length == 1 && args[0] == "--cef-credentials-smoke";
@@ -187,6 +188,9 @@ internal static class Program
                 CefExtensionRegistry.Add(dataPathCef, source);
             }
             var cefPrefs = BrowserPreferences.Load(dataPathCef);
+            if (videoSmoke && Enum.TryParse<VideoPresentationMode>(
+                Environment.GetEnvironmentVariable("MBROWSER_VIDEO_SMOKE_MODE"), true, out var testMode))
+                cefPrefs.VideoPresentation = CefVideoPolicy.Validate(testMode);
             var cefSettings = new CefSharp.WinForms.CefSettings
             {
                 RootCachePath = cefRoot,
@@ -216,9 +220,18 @@ internal static class Program
             string installedExtensions = CefExtensionRegistry.EnabledPaths(dataPathCef);
             if (!string.IsNullOrWhiteSpace(installedExtensions))
                 cefSettings.CefCommandLineArgs["load-extension"] = installedExtensions;
+            var videoPolicy = CefVideoPolicy.Options(cefPrefs.VideoPresentation, cefPrefs.HardwareAcceleration);
             string cefFeatures = CefMemoryFeatures.CommandLine(cefPrefs, customCef);
-            if (cefFeatures.Length > 0)
-                cefSettings.CefCommandLineArgs["enable-features"] = cefFeatures;
+            string enabled = string.Join(",", new[] { cefFeatures, videoPolicy.EnableFeatures }
+                .Where(value => value.Length > 0));
+            if (enabled.Length > 0)
+                cefSettings.CefCommandLineArgs["enable-features"] = enabled;
+            if (videoPolicy.DisableFeatures.Length > 0)
+                cefSettings.CefCommandLineArgs["disable-features"] = videoPolicy.DisableFeatures;
+            if (cefPrefs.HardwareAcceleration && cefPrefs.VideoPresentation == VideoPresentationMode.Stable)
+                cefSettings.CefCommandLineArgs[CefVideoPolicy.DisableOverlaysSwitch] = "";
+            if (videoPolicy.DisableDirectComposition)
+                cefSettings.CefCommandLineArgs["disable-direct-composition"] = "";
             // A cold CEF process can be slow while Windows verifies native DLLs.
             // Show real startup status before the synchronous native load.
             using var startup = cefSmoke ? null : new Form
@@ -282,7 +295,7 @@ internal static class Program
                 cefForm.Shown += (_, _) =>
                 {
                     var timer = new System.Windows.Forms.Timer
-                    { Interval = faceDetectionSmoke ? 20000 : urlSmoke ? 30000 : 9000 };
+                    { Interval = faceDetectionSmoke ? 20000 : videoSmoke ? 6500 : urlSmoke ? 30000 : 9000 };
                     timer.Tick += async (_, _) =>
                     {
                         timer.Stop();
@@ -301,6 +314,11 @@ internal static class Program
                                 await cefForm.CefNativePasswordUiForTestAsync() : "not tested";
                             string faceDetectionResult = faceDetectionSmoke
                                 ? await cefForm.CefFaceDetectionSmokeResultForTestAsync() : "not tested";
+                            string videoReport = videoSmoke
+                                ? await cefForm.CefVideoFrameReportForTestAsync() : "not tested";
+                            if (videoSmoke)
+                                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "cef-video-smoke.json"),
+                                    videoReport);
                             var info = cefForm.CefDiagnosticsForTest();
                             File.WriteAllText(Path.Combine(dataPathCef, "cef-smoke.txt"),
                                 "CEF_WINDOW_SHOWN=" + cefForm.IsHandleCreated +
@@ -326,7 +344,8 @@ internal static class Program
                                 (extensionSmoke && (!mv3 || !mv3Worker)) ||
                                 (extensionPopupSmoke && !popupReady) ||
                                 (credentialSmoke && cefForm.CefLoginBridgeMessagesForTest == 0) ||
-                                (faceDetectionSmoke && !faceDetectionResult.StartsWith("ok:", StringComparison.Ordinal))) ? 1 : 0;
+                                (faceDetectionSmoke && !faceDetectionResult.StartsWith("ok:", StringComparison.Ordinal)) ||
+                                (videoSmoke && !videoReport.StartsWith("{", StringComparison.Ordinal))) ? 1 : 0;
                         }
                         catch (Exception ex)
                         {

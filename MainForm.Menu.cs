@@ -37,6 +37,7 @@ internal sealed partial class MainForm
         {
             rows("Движок: Chromium CEF 154", () => { });
             rows("Оптимизации памяти CEF  ›", ShowCefMemorySettings);
+            rows("Видео · GPU и проверка FPS  ›", ShowVideoSettings);
             rows("Измерить RAM процессов CEF  ›", ShowCefDiagnostics);
             rows("Новая вкладка", () => RunUi(() => OpenTabAsync()));
             rows("Открыть файл…", OpenDocument);

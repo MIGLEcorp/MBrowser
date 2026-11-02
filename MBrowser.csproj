@@ -13,8 +13,8 @@
     <Company>MIGLEcorp</Company>
     <ApplicationIcon>assets\mbrowser.ico</ApplicationIcon>
     <RootNamespace>MBrowser</RootNamespace>
-    <Version>4.4.1</Version>
-    <InformationalVersion>4.4.1</InformationalVersion>
+    <Version>4.4.2</Version>
+    <InformationalVersion>4.4.2</InformationalVersion>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

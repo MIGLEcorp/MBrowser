@@ -30,6 +30,28 @@ public static class CoreTests
         {
             ThemeTests.RunCore(Check, folder);
             BrowserIntegrationTests.RunCore(Check,folder);
+            Check("CEF video presentation preserves GPU decode and frame counters", () =>
+            {
+                Assert(new BrowserPreferences().VideoPresentation == VideoPresentationMode.Compatibility,
+                    "Known GPU child-window crash workaround must be the default");
+                var stable = CefVideoPolicy.Options(VideoPresentationMode.Stable, true);
+                Assert(stable.EnableFeatures.Contains("DCompTripleBufferVideoSwapChain") &&
+                    stable.DisableFeatures.Contains("DirectCompositionSoftwareOverlays") &&
+                    CefVideoPolicy.DisableOverlaysSwitch == "disable_direct_composition_video_overlays" &&
+                    !stable.DisableDirectComposition, "Stable video mode changed GPU decode or failed to limit overlays");
+                var chromium = CefVideoPolicy.Options(VideoPresentationMode.Default, true);
+                Assert(chromium == ("", "", false), "Standard Chromium mode is not unchanged");
+                var fallback = CefVideoPolicy.Options(VideoPresentationMode.Compatibility, true);
+                Assert(fallback.DisableDirectComposition && fallback.EnableFeatures.Length == 0, "Compatibility fallback not enabled");
+                Assert(CefVideoPolicy.Options(VideoPresentationMode.Stable, false) == ("", "", false),
+                    "Video workarounds should not be applied when GPU acceleration is disabled");
+                var first = new VideoFrameSample(1000, 1, 60, 2, 1920, 1080, false, 4, "");
+                var last = first with { TimestampMs = 3000, CurrentTimeSeconds = 3, TotalFrames = 180,
+                    DroppedFrames = 8 };
+                var stats = VideoFrameReport.Calculate(first, last);
+                Assert(stats.Playing && Math.Abs(stats.PresentedFps - 57) < .01 &&
+                    Math.Abs(stats.DroppedPercent - 5) < .01, "Video FPS/dropped frames calculation is wrong");
+            });
             Check("CEF stale frame during FrameLoadEnd cannot terminate the host", () =>
             {
                 bool injected = false;
