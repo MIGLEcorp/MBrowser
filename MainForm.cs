@@ -15,9 +15,9 @@ internal sealed partial class MainForm : BrowserWindow
     private readonly Panel _viewport = new() { Dock = DockStyle.Fill, BackColor = Palette.Background };
     private readonly HomeSurface _home = new();
     private readonly Label _status = new();
-    private readonly Button _back = Palette.Button("←", "Назад (Alt+←)");
-    private readonly Button _forward = Palette.Button("→", "Вперёд (Alt+→)");
-    private readonly Button _reload = Palette.Button("↻", "Обновить (F5)");
+    private readonly Button _back = Palette.IconButton("Back", "←", "Назад (Alt+←)");
+    private readonly Button _forward = Palette.IconButton("Forward", "→", "Вперёд (Alt+→)");
+    private readonly Button _reload = Palette.IconButton("Reload", "↻", "Обновить (F5)");
     private readonly ToolTip _tips = new();
     private readonly System.Windows.Forms.Timer _idleTimer = new() { Interval = 15000 };
     private readonly System.Windows.Forms.Timer _saveTimer = new() { Interval = 800 };
@@ -115,6 +115,7 @@ internal sealed partial class MainForm : BrowserWindow
         _back.Enabled = ActiveTab.CanGoBack;
         _forward.Enabled = ActiveTab.CanGoForward;
         _reload.Text = IsPageLoading ? "×" : "↻";
+        if (_reload is RoundedButton loadingButton) loadingButton.IconKey = IsPageLoading ? "Stop" : "Reload";
         Text = (_cefEngine ? "MBrowser [CEF 154] — " : "MBrowser — ") + ActiveTab.Title;
         _saveTimer.Stop();
         _saveTimer.Start();
@@ -215,6 +216,7 @@ internal sealed partial class MainForm : BrowserWindow
             _faviconCache?.Dispose();
             DestroyAllViews();
             ThemeMedia.ReleaseAll();
+            ThemeIcons.ReleaseAll();
         }
         base.Dispose(disposing);
     }

@@ -238,6 +238,15 @@ internal class BrowserWindow : Form
             var g = e.Graphics;
             base.OnPaintBackground(e);
             if (_hover) { using var fill = new SolidBrush(_glyph == CaptionGlyph.Close ? Color.FromArgb(193, 48, 73) : Palette.Raised); g.FillRectangle(fill, ClientRectangle); }
+            string key = _glyph switch
+            {
+                CaptionGlyph.Minimize => "Minimize",
+                CaptionGlyph.Close => "Close",
+                _ => FindForm()?.WindowState == FormWindowState.Maximized ? "Restore" : "Maximize"
+            };
+            int size = 21;
+            if (ThemeIcons.TryDraw(g, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size), key, this))
+                return;
             using var pen = new Pen(_hover && _glyph == CaptionGlyph.Close ? Color.White : Palette.Text, 1.15f);
             int x = Width / 2 - 5, y = Height / 2 - 5;
             if (_glyph == CaptionGlyph.Minimize) g.DrawLine(pen, x, y + 5, x + 10, y + 5);

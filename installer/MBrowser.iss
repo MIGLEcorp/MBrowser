@@ -1,11 +1,11 @@
-#define AppVersion "4.4.0"
+#define AppVersion "4.4.1"
 [Setup]
 AppId={{B4E6167D-3A9C-41E6-A0A2-9176BEDDAC12}
 AppName=MBrowser
 MinVersion=10.0.19041
 AppMutex={code:GetAppMutex}
 AppVersion={#AppVersion}
-AppVerName=MBrowser 4.4.0 - stable Chromium CEF 154
+AppVerName=MBrowser 4.4.1 - stable Chromium CEF 154
 AppPublisher=MIGLEcorp
 AppPublisherURL=https://github.com/MIGLEcorp/MBrowser
 DefaultDirName={localappdata}\Programs\MBrowser

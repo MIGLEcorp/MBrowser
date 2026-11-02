@@ -48,7 +48,8 @@ internal sealed partial class MainForm
             rows("Импорт данных…", ShowImport);
             rows("Перенос со старого WebView2  ›", ShowCefMigrationNotice);
             rows("Загрузки", ShowDownloads);
-            rows("Оформление  ›", ShowThemeMenu);
+            rows("Выбрать тему  ›", ShowThemePicker);
+            rows("Редактор тем  ›", ShowThemeMenu);
             rows("Браузер по умолчанию…", BrowserRegistration.OpenSettings);
             rows("Подсказки DuckDuckGo: " + (_preferences.NetworkSuggestions ? "вкл." : "выкл."), () =>
             { _preferences.NetworkSuggestions = !_preferences.NetworkSuggestions; _preferences.Save(DataPath); });
@@ -86,6 +87,23 @@ internal sealed partial class MainForm
         panel.Controls.Add(content);
         ShowOverlay(panel, new Point(_viewport.Width - panel.Width - 12, 10));
         _menu = panel;
+    }
+
+    private void ShowThemePicker()
+    {
+        ShowMenuPage("Темы MBrowser", rows =>
+        {
+            foreach (var theme in ThemeSettings.Library(DataPath))
+            {
+                var chosen = theme;
+                rows((chosen.Id == ThemeSettings.Document.Id ? "✓  " : "    ") + chosen.Name, () =>
+                {
+                    ThemeSettings.Save(chosen, DataPath);
+                    ApplyCurrentTheme();
+                });
+            }
+            rows("Создать или редактировать тему  ›", ShowThemeMenu);
+        });
     }
 
     internal void ShowThemeMenu()

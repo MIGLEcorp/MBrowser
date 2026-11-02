@@ -39,6 +39,8 @@ internal class GlassPanel : Panel
 internal sealed class RoundedButton : Button
 {
     private float _hover;
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal string IconKey { get; set; } = "";
     internal RoundedButton() { FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; DoubleBuffered = true; SetStyle(ControlStyles.SupportsTransparentBackColor, true); }
     private void Hover(float target) { float start = _hover; UiMotion.Start(this,120,t => { _hover = start + (target-start)*t; Invalidate(); }); }
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Hover(1); }
@@ -51,6 +53,10 @@ internal sealed class RoundedButton : Button
         using var fill = new SolidBrush(BackColor.A == 0 ? Color.FromArgb(80 + (int)(85*_hover), Palette.Surface) : UiMotion.Blend(BackColor,Palette.Raised,_hover));
         e.Graphics.FillPath(fill, shape);
         var textArea = Width <= 50 ? ClientRectangle : new Rectangle(8, 0, Width - 16, Height);
+        if (IconKey.Length > 0 &&
+            ThemeIcons.TryDraw(e.Graphics, new Rectangle((Width - Math.Min(23, Height - 10)) / 2,
+                (Height - Math.Min(23, Height - 10)) / 2, Math.Min(23, Height - 10), Math.Min(23, Height - 10)), IconKey, this))
+            return;
         if (Image is not null) { e.Graphics.DrawImage(Image, 10, (Height - 18) / 2, 18, 18); textArea.X += 26; textArea.Width -= 26; }
         TextRenderer.DrawText(e.Graphics, Text, Font, textArea, Enabled ? ForeColor : Palette.Muted,
             TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding |

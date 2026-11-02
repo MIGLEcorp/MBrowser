@@ -18,6 +18,10 @@ internal sealed class ThemeEditor : GlassPanel
     private readonly Label _file = new() { Width = 254, Height = 30, AutoEllipsis = true, BackColor = Color.Transparent };
     private readonly Label _amount = new() { Width = 254, Height = 24, BackColor = Color.Transparent };
     private readonly TextBox _name = new() { Width = 254, MaxLength = 80 };
+    private readonly ComboBox _themes = new() { Width = 254, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _iconKey = new() { Width = 254, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly Label _iconFile = new() { Width = 254, Height = 30, AutoEllipsis = true };
+    private List<ThemeDocument> _available = [];
     private bool _binding, _saved;
 
     internal ThemeEditor(string dataPath, Action refresh, Action close, Size? chromeSize = null)
@@ -51,16 +55,34 @@ internal sealed class ThemeEditor : GlassPanel
         _area.BackColor = _fit.BackColor = _tint.BackColor = Palette.Surface;
         _area.ForeColor = _fit.ForeColor = Palette.Text;
         _name.TextChanged += (_, _) => _draft = _draft with { Name = _name.Text };
-        var presets = new FlowLayoutPanel { Width = 260, Height = 42, BackColor = Color.Transparent };
-        foreach (var (title, theme) in new[] { ("Pink kawaii", BrowserTheme.Anime), ("Тёмная", BrowserTheme.Dark), ("Светлая", BrowserTheme.Light) })
+        Label("Мои темы", 35, true);
+        _themes.BackColor = _iconKey.BackColor = Palette.Raised;
+        _themes.ForeColor = _iconKey.ForeColor = Palette.Text;
+        rows.Controls.Add(_themes);
+        _themes.SelectedIndexChanged += (_, _) =>
         {
-            var button = Palette.Button(title, title, 80);
-            button.Font = new Font("Segoe UI",8.5f);
-            button.BackColor = Color.Transparent;
-            button.Click += (_, _) => { _draft = ThemeSettings.Preset(theme); _name.Text = _draft.Name; Preview(); BindLayer(); };
-            presets.Controls.Add(button);
-        }
-        rows.Controls.Add(presets);
+            if (_binding || _themes.SelectedIndex < 0 || _themes.SelectedIndex >= _available.Count) return;
+            _draft = _available[_themes.SelectedIndex];
+            _name.Text = _draft.Name;
+            Preview(); BindLayer(); BindIcon();
+        };
+        RefreshThemes();
+        Button("Создать копию темы", () =>
+        {
+            _draft = _draft with { Id = Guid.NewGuid().ToString("N"), Name = "Моя тема" };
+            _name.Text = _draft.Name;
+            _binding = true; _themes.SelectedIndex = -1; _binding = false;
+            Preview(); BindLayer(); BindIcon();
+        });
+        Button("Удалить выбранную тему", () =>
+        {
+            if (ThemeSettings.IsBuiltin(_draft.Id)) return;
+            ThemeSettings.Delete(_draft.Id, _dataPath);
+            _draft = ThemeSettings.Preset(BrowserTheme.Dark);
+            RefreshThemes(); _name.Text = _draft.Name;
+            Preview(); BindLayer(); BindIcon();
+            _saved = true;
+        });
         Label("Фон панели", 35, true);
         _area.Items.AddRange(["Шапка целиком — одно изображение", "Главная страница", "Меню"]);
         _area.SelectedIndex = 0; rows.Controls.Add(_area);
@@ -112,10 +134,34 @@ internal sealed class ThemeEditor : GlassPanel
             swatches.Controls.Add(swatch);
         }
         rows.Controls.Add(swatches);
+        Label("Иконки элементов браузера", 35, true);
+        Label("Для каждой темы свой комплект. PNG с альфа-каналом и анимированные GIF поддерживаются.", 65);
+        foreach (var key in ThemeIcons.KnownKeys)
+            _iconKey.Items.Add(new IconChoice(key.Key, key.Value));
+        _iconKey.SelectedIndex = 0;
+        rows.Controls.Add(_iconKey);
+        rows.Controls.Add(_iconFile);
+        _iconKey.SelectedIndexChanged += (_, _) => BindIcon();
+        Button("Выбрать PNG / GIF / JPG для иконки…", () =>
+        {
+            using var dialog = new OpenFileDialog { Filter = "Иконки|*.png;*.gif;*.jpg;*.jpeg", Title = "Иконка: " + SelectedIconKey };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            string file = ThemeMedia.Import(dialog.FileName, _dataPath);
+            _draft = _draft with { Icons = new(_draft.Icons) { [SelectedIconKey] = file } };
+            Preview(); BindIcon();
+        });
+        Button("Вернуть стандартную иконку", () =>
+        {
+            var icons = new Dictionary<string, string>(_draft.Icons);
+            icons.Remove(SelectedIconKey);
+            _draft = _draft with { Icons = icons };
+            Preview(); BindIcon();
+        });
         Button("Импортировать тему…", () =>
         {
             using var dialog = new OpenFileDialog { Filter = "Тема MBrowser|*.mbtheme" };
-            if (dialog.ShowDialog(this) == DialogResult.OK) { _draft = ThemePackage.Import(dialog.FileName, _dataPath); _name.Text = _draft.Name; Preview(); BindLayer(); }
+            if (dialog.ShowDialog(this) == DialogResult.OK) { _draft = ThemePackage.Import(dialog.FileName, _dataPath) with { Id = Guid.NewGuid().ToString("N") };
+                _name.Text = _draft.Name; Preview(); BindLayer(); BindIcon(); }
         });
         Button("Экспортировать тему…", () =>
         {
@@ -129,6 +175,27 @@ internal sealed class ThemeEditor : GlassPanel
         { rows.Controls.Remove(button); footer.Controls.Add(button); }
         Controls.Add(footer);
         BindLayer();
+        BindIcon();
+    }
+    private sealed record IconChoice(string Key, string Title)
+    {
+        public override string ToString() => Title;
+    }
+    private string SelectedIconKey => _iconKey.SelectedItem is IconChoice choice ? choice.Key : "Back";
+    private void BindIcon()
+    {
+        string file = _draft.Icons.GetValueOrDefault(SelectedIconKey) ?? "";
+        _iconFile.Text = file.Length == 0 ? "Стандартная иконка" : "Своя иконка: " + Path.GetExtension(file).ToUpperInvariant();
+    }
+    private void RefreshThemes()
+    {
+        _binding = true;
+        _available = ThemeSettings.Library(_dataPath).ToList();
+        _themes.Items.Clear();
+        foreach (var document in _available) _themes.Items.Add(document.Name);
+        int selected = _available.FindIndex(d => d.Id == _draft.Id);
+        _themes.SelectedIndex = selected;
+        _binding = false;
     }
     private ThemeArea Area => Areas[Math.Clamp(_area.SelectedIndex,0,Areas.Length-1)];
     internal void UpdateChromeReference(Size size) { _canvas.ChromeReferenceSize = size; _canvas.Invalidate(); }

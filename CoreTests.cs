@@ -404,13 +404,13 @@ public static class CoreTests
                 settings = BrowserPreferences.Load(settingsPath);
                 Assert(settings.UnloadAfterMinutes == 1, "Settings bounds");
                 ThemeSettings.Load(settingsPath);
-                Assert(ThemeSettings.Current == BrowserTheme.Anime, "Anime must be default");
+                Assert(ThemeSettings.Current == BrowserTheme.Dark && ThemeSettings.Colors.Background == Color.Black, "OLED must be default");
                 ThemeSettings.Select(BrowserTheme.Light, settingsPath);
                 ThemeSettings.Load(settingsPath);
                 Assert(ThemeSettings.Current == BrowserTheme.Light, "Theme not persisted");
                 File.WriteAllText(Path.Combine(settingsPath, "theme.json"), "\"invalid\"");
                 ThemeSettings.Load(settingsPath);
-                Assert(ThemeSettings.Current == BrowserTheme.Anime, "Invalid theme recovery");
+                Assert(ThemeSettings.Current == BrowserTheme.Dark, "Invalid theme recovery");
             });
 
             Check("Scroll state survives session storage and is bounded", () =>

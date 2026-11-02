@@ -27,6 +27,13 @@ internal static class Palette
         return button;
     }
 
+    public static Button IconButton(string key, string fallback, string accessibleName, int width = 40)
+    {
+        var button = (RoundedButton)Button(fallback, accessibleName, width);
+        button.IconKey = key;
+        return button;
+    }
+
     /// <summary>Preserves semantic color roles while changing the entire native control tree.</summary>
     public static void Apply(Control root)
     {
@@ -96,6 +103,7 @@ internal sealed class TabStrip : Control
     private Rectangle _plus, _previous, _next;
     private readonly ToolTip _tip = new();
     private int _hovered = -2;
+    private Point _hoverPoint;
 
     public TabStrip()
     {
@@ -174,8 +182,14 @@ internal sealed class TabStrip : Control
                 new Rectangle(bounds.Left + (anime ? 40 : 27), bounds.Top, bounds.Width - (anime ? 70 : 57), bounds.Height),
                 active ? Palette.Text : Palette.Muted,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            using (var closePen = new Pen(Palette.Muted, 1.3f))
+            if (_hovered == index && close.Contains(_hoverPoint))
             {
+                using var glow = new SolidBrush(Color.FromArgb(80, Palette.Accent));
+                g.FillEllipse(glow, close);
+            }
+            if (!ThemeIcons.TryDraw(g, new Rectangle(close.X + 3, close.Y + 3, 16, 16), "TabClose", this))
+            {
+                using var closePen = new Pen(Palette.Muted, 1.3f);
                 g.DrawLine(closePen, close.Left + 8, close.Top + 8, close.Left + 14, close.Top + 14);
                 g.DrawLine(closePen, close.Left + 14, close.Top + 8, close.Left + 8, close.Top + 14);
             }
@@ -190,11 +204,20 @@ internal sealed class TabStrip : Control
         _plus = new Rectangle(end, 8, 34, 34);
         _previous = HasOverflow ? new Rectangle(end + 37, 8, 29, 34) : Rectangle.Empty;
         _next = HasOverflow ? new Rectangle(end + 68, 8, 29, 34) : Rectangle.Empty;
-        TextRenderer.DrawText(g, "+", Font, _plus, Palette.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        foreach (var (area, key) in new[] { (_plus, -3), (_previous, -4), (_next, -5) })
+            if (!area.IsEmpty && _hovered == key)
+            {
+                using var glow = new SolidBrush(Color.FromArgb(100, Palette.Accent));
+                g.FillEllipse(glow, area);
+            }
+        if (!ThemeIcons.TryDraw(g, Rectangle.Inflate(_plus, -6, -6), "TabNew", this))
+            TextRenderer.DrawText(g, "+", Font, _plus, Palette.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         if (HasOverflow)
         {
-            TextRenderer.DrawText(g, "‹", Font, _previous, Palette.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(g, "›", Font, _next, Palette.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (!ThemeIcons.TryDraw(g, Rectangle.Inflate(_previous, -5, -8), "TabPrevious", this))
+                TextRenderer.DrawText(g, "‹", Font, _previous, Palette.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (!ThemeIcons.TryDraw(g, Rectangle.Inflate(_next, -5, -8), "TabNext", this))
+                TextRenderer.DrawText(g, "›", Font, _next, Palette.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
 
@@ -224,8 +247,11 @@ internal sealed class TabStrip : Control
         var hit = _hits.FirstOrDefault(x => x.Bounds.Contains(e.Location));
         int index = hit.Bounds.IsEmpty ? -1 : hit.Index;
         int hoverKey = index >= 0 ? index : _plus.Contains(e.Location) ? -3 : _previous.Contains(e.Location) ? -4 : _next.Contains(e.Location) ? -5 : -1;
-        if (hoverKey == _hovered) return;
+        bool changed = hoverKey != _hovered || index >= 0 && _hits.Any(h => h.Index == index && h.Close.Contains(e.Location) != h.Close.Contains(_hoverPoint));
+        _hoverPoint = e.Location;
+        if (!changed) return;
         _hovered = hoverKey;
+        Invalidate();
         string hint = _plus.Contains(e.Location) ? "Новая вкладка: Ctrl+T" : "Перетащите, чтобы переместить окно; двойной щелчок — развернуть";
         if (_previous.Contains(e.Location)) hint = "Предыдущие вкладки";
         if (_next.Contains(e.Location)) hint = "Следующие вкладки";
@@ -236,6 +262,13 @@ internal sealed class TabStrip : Control
             hint = $"{Tabs[index].Title}\n{Tabs[index].CurrentUrl ?? "Стартовая страница"}\n{state}";
         }
         _tip.SetToolTip(this, hint);
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hovered = -2;
+        Invalidate();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

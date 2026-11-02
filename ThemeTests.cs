@@ -26,6 +26,29 @@ internal static class ThemeTests
             File.WriteAllText(Path.Combine(profile, "theme.json"), "\"Dark\""); ThemeSettings.Load(profile);
             Assert(ThemeSettings.Current == BrowserTheme.Dark, "Legacy theme not migrated");
         });
+        check("OLED default, separate user themes, and icon sets survive switching", () =>
+        {
+            string isolated = Path.Combine(folder, "theme-library");
+            Directory.CreateDirectory(isolated);
+            ThemeSettings.Load(isolated);
+            Assert(ThemeSettings.Current == BrowserTheme.Dark && ThemeSettings.Colors.Background.ToArgb() == Color.Black.ToArgb(), "Default is not true OLED black");
+            Assert(!ThemeSettings.Library(isolated).Any(x => x.Name.Equals("Pink kawaii", StringComparison.OrdinalIgnoreCase)), "Removed default Pink kawaii preset is still in the list");
+            var first = ThemeSettings.Preset(BrowserTheme.Dark) with { Id = Guid.NewGuid().ToString("N"), Name = "Violet",
+                Icons = new() { ["Back"] = "media-one.gif" } };
+            var second = ThemeSettings.Preset(BrowserTheme.Dark) with { Id = Guid.NewGuid().ToString("N"), Name = "Cyber",
+                Icons = new() { ["Back"] = "media-two.png", ["Close"] = "media-three.gif" } };
+            ThemeSettings.Save(first, isolated);
+            ThemeSettings.Save(second, isolated);
+            Assert(ThemeSettings.Library(isolated).Count == 4, "User themes were overwritten in the library");
+            ThemeSettings.Save(first, isolated); ThemeSettings.Load(isolated);
+            Assert(ThemeSettings.Document.Name == "Violet" && ThemeSettings.Document.Icons["Back"] == "media-one.gif", "First icon set was not restored");
+            ThemeSettings.Save(second, isolated); ThemeSettings.Load(isolated);
+            Assert(ThemeSettings.Document.Name == "Cyber" && ThemeSettings.Document.Icons["Back"] == "media-two.png" &&
+                ThemeSettings.Document.Icons["Close"] == "media-three.gif", "Second icon set was not restored");
+            ThemeSettings.Delete(first.Id, isolated);
+            Assert(ThemeSettings.Library(isolated).Count == 3, "User theme deletion broke the library");
+            ThemeSettings.Load(profile);
+        });
         check("Header strips sample one PNG in shared coordinates without seams or overpainting", () =>
         {
             ThemeSettings.Load(profile);
@@ -68,6 +91,8 @@ internal static class ThemeTests
             string file = ThemeMedia.Import(gif, profile);
             var doc = ThemeSettings.Preset(BrowserTheme.Anime);
             doc.Layers[ThemeArea.Menu] = new(file, "contain", 54);
+            doc.Icons["Back"] = file;
+            doc.Icons["Close"] = file;
             string package = Path.Combine(folder, "portable.mbtheme");
             ThemePackage.Export(package, doc);
             // This entry must never be extracted, even though it is a valid ZIP member.
@@ -76,6 +101,8 @@ internal static class ThemeTests
             string next = Path.Combine(folder, "theme-import");
             var imported = ThemePackage.Import(package, next);
             Assert(imported.Layers[ThemeArea.Menu].Tint == 54, "Layer opacity lost");
+            Assert(imported.Icons.Count == 2 && imported.Icons["Back"] == imported.Icons["Close"] &&
+                File.Exists(Path.Combine(next, "ThemeMedia", imported.Icons["Back"])), "Theme icon files were not packaged");
             string importedGif = Path.Combine(next, "ThemeMedia", imported.Layers[ThemeArea.Menu].File);
             Assert(File.ReadAllBytes(importedGif).SequenceEqual(File.ReadAllBytes(gif)), "GIF was flattened or lost");
             Assert(!File.Exists(Path.Combine(folder, "escape.txt")), "ZIP traversal extracted");
@@ -89,8 +116,9 @@ internal static class ThemeTests
             try { ThemeMedia.Import(bad, profile); } catch (ArgumentException) { rejected = true; }
             Assert(rejected, "Invalid image accepted");
             string zipPath = Path.Combine(folder, "missing.mbtheme");
+            var brokenDoc = ThemeSettings.Preset(BrowserTheme.Dark) with { Icons = new() { ["Back"] = "missing.png" } };
             using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
-            using (var writer = new StreamWriter(zip.CreateEntry("theme.json").Open())) writer.Write(JsonSerializer.Serialize(ThemeSettings.Preset(BrowserTheme.Anime)));
+            using (var writer = new StreamWriter(zip.CreateEntry("theme.json").Open())) writer.Write(JsonSerializer.Serialize(brokenDoc));
             rejected = false;
             try { ThemePackage.Import(zipPath, profile); } catch (InvalidDataException) { rejected = true; }
             Assert(rejected, "Missing image silently accepted");
@@ -150,10 +178,9 @@ internal static class ThemeTests
             check(ThemeSettings.Layer(ThemeArea.Chrome).PanX>0 && canvas.SelectedArea==ThemeArea.Chrome,"Dragging the graphical canvas moves the entire header background");
             SendMessage(canvas.Handle,0x0100,(nint)Keys.Add,0);
             check(ThemeSettings.Layer(ThemeArea.Chrome).Zoom>1,"The graphical canvas supports keyboard image zoom");
-            var pink = Descendants(editor).OfType<Button>().Single(x => x.Text == "Pink kawaii");
-            var dark = Descendants(editor).OfType<Button>().Single(x => x.Text == "Тёмная");
-            dark.PerformClick();
-            check(ThemeSettings.Current == BrowserTheme.Dark, "Theme editor previews changes immediately");
+            var themePicker = Descendants(editor).OfType<ComboBox>().Single(x => x.Items.Cast<object>().Any(i => i.ToString() == "OLED / AMOLED"));
+            themePicker.SelectedIndex = 1;
+            check(ThemeSettings.Current == BrowserTheme.Light, "Theme editor previews changes immediately");
             form.Size = new Size(1000, 700); await Task.Delay(70);
             check(form.InternalMenuControlForTest == editor && !editor.IsDisposed, "Theme editor stays open and fits after resizing");
             form.CloseOverlay();
@@ -161,7 +188,7 @@ internal static class ThemeTests
             form.Size = initialSize;
             form.ShowThemeMenu();
             editor = form.InternalMenuControlForTest!;
-            Descendants(editor).OfType<Button>().Single(x => x.Text == "Pink kawaii").PerformClick();
+            Descendants(editor).OfType<Button>().Single(x => x.Text == "Создать копию темы").PerformClick();
             editor.Refresh(); await Task.Delay(80);
             using (var bitmap = Capture(editor)) bitmap.Save("preview-theme.png", ImageFormat.Png);
             Descendants(editor).OfType<Button>().Single(x => x.Text == "Сохранить тему").PerformClick();

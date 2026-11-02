@@ -59,12 +59,12 @@ internal sealed partial class MainForm
             _bookmarkBar.Controls.Add(button);
             button.Image = Favicons.GetCached(item.Url);
         }
-        var add = Palette.Button("＋", "Добавить или изменить закладки", 34);
+        var add = Palette.IconButton("BookmarkAdd", "＋", "Добавить или изменить закладки", 34);
         add.BackColor = Color.Transparent;
         add.Height = 30;
         add.Click += (_, _) => ShowBookmarks();
         _bookmarkBar.Controls.Add(add);
-        var more = Palette.Button("»", "Остальные закладки", 34);
+        var more = Palette.IconButton("BookmarkMore", "»", "Остальные закладки", 34);
         more.BackColor = Color.Transparent;
         more.Height = 30;
         more.Tag = "overflow";

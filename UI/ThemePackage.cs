@@ -22,8 +22,15 @@ internal static class ThemePackage
                     if (string.IsNullOrEmpty(layer.File) || !File.Exists(path)) { layers[area] = layer with { File = "" }; continue; }
                     if (added.Add(layer.File)) archive.CreateEntryFromFile(path, "media/" + layer.File);
                 }
+                var icons = new Dictionary<string, string>(document.Icons);
+                foreach (var (key, file) in document.Icons)
+                {
+                    string path = ThemeMedia.Resolve(file);
+                    if (!File.Exists(path)) { icons.Remove(key); continue; }
+                    if (added.Add(file)) archive.CreateEntryFromFile(path, "media/" + file);
+                }
                 using var writer = new StreamWriter(archive.CreateEntry("theme.json").Open());
-                writer.Write(JsonSerializer.Serialize(document with { Layers = layers }, ThemeSettings.JsonOptions));
+                writer.Write(JsonSerializer.Serialize(document with { Layers = layers, Icons = icons }, ThemeSettings.JsonOptions));
             }
             File.Move(temporary, destination, true);
         }
@@ -33,7 +40,7 @@ internal static class ThemePackage
     {
         if (new FileInfo(source).Length > 85 * 1024 * 1024) throw new InvalidDataException("Пакет темы слишком большой.");
         using var archive = ZipFile.OpenRead(source);
-        if (archive.Entries.Count > 7 || archive.Entries.Any(x => x.Length > 16 * 1024 * 1024) || archive.Entries.Sum(x => x.Length) > 85 * 1024 * 1024) throw new InvalidDataException("Слишком много данных в теме.");
+        if (archive.Entries.Count > 64 || archive.Entries.Any(x => x.Length > 16 * 1024 * 1024) || archive.Entries.Sum(x => x.Length) > 85 * 1024 * 1024) throw new InvalidDataException("Слишком много данных в теме.");
         var settings = archive.GetEntry("theme.json");
         if (settings is null || settings.Length > 32768) throw new InvalidDataException("Нет допустимого theme.json.");
         using var reader = new StreamReader(settings.Open());
@@ -60,6 +67,22 @@ internal static class ThemePackage
             }
             layers[area] = layer with { File = file };
         }
-        return document with { Layers = layers };
+        var icons = new Dictionary<string, string>();
+        foreach (var (key, fileName) in document.Icons)
+        {
+            if (imported.TryGetValue(fileName, out var reused)) { icons[key] = reused; continue; }
+            var entry = archive.GetEntry("media/" + fileName);
+            if (entry is null || entry.Length > 16 * 1024 * 1024) throw new InvalidDataException("В пакете отсутствует файл иконки.");
+            string temporary = Path.GetTempFileName();
+            try
+            {
+                entry.ExtractToFile(temporary, true);
+                string file = ThemeMedia.Import(temporary, dataPath);
+                imported[fileName] = file;
+                icons[key] = file;
+            }
+            finally { File.Delete(temporary); }
+        }
+        return document with { Layers = layers, Icons = icons };
     }
 }
