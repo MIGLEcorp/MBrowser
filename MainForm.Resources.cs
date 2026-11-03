@@ -75,6 +75,26 @@ internal sealed partial class MainForm
             SaveResourcePreferences();
         };
         content.Controls.Add(modes);
+        TextRow("Процессы CEF (изменения после перезапуска):", 36);
+        var subprocessModes = new ComboBox
+        {
+            Width = 375, Height = 36, DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor = Palette.Raised, ForeColor = Palette.Text,
+            AccessibleName = "Группировка процессов или минимальная память"
+        };
+        subprocessModes.Items.AddRange([
+            "Авто — Compact в Low Memory / Extreme",
+            "Grouped — все процессы под MBrowser.exe",
+            "Compact — раздельные CEF, меньше RAM"
+        ]);
+        subprocessModes.SelectedIndex = (int)_preferences.SubprocessMode;
+        subprocessModes.SelectedIndexChanged += (_, _) =>
+        {
+            _preferences.SubprocessMode = (CefSubprocessMode)subprocessModes.SelectedIndex;
+            SaveResourcePreferences();
+        };
+        content.Controls.Add(subprocessModes);
+        TextRow("Compact отключает группировку в диспетчере задач.", 30);
         TextRow("Время простоя (минуты):");
         var minutes = new NumericUpDown
         {
@@ -138,6 +158,19 @@ internal sealed partial class MainForm
             appPrivate = process.PrivateMemorySize64;
         }
         catch (InvalidOperationException) { }
+        var workerUsage = new List<(int Pid, string Name, long Working, long Private)>();
+        foreach (int pid in CefProcessMetrics.GetDescendantIds(Environment.ProcessId))
+        {
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                workerUsage.Add((pid, process.ProcessName, process.WorkingSet64,
+                    process.PrivateMemorySize64));
+            }
+            catch (Exception error) when (error is ArgumentException or InvalidOperationException or
+                System.ComponentModel.Win32Exception) { }
+        }
+        var topWorkers = workerUsage.OrderByDescending(p => p.Private).Take(5).ToArray();
         var gpu = NativeGpuDiagnostics.Read();
         var systemGpuUsage = NativeGpuDiagnostics.SystemDedicatedUsage();
         long available = AdaptiveResourceManager.AvailableRamBytes();
@@ -149,6 +182,8 @@ internal sealed partial class MainForm
         ShowMenuPage("Диагностика ресурсов", rows =>
         {
             rows("Режим: " + _preferences.MemoryMode, ShowResourceSettings);
+            rows("CEF-процессы: " + CefSubprocessPolicy.Executable(_preferences.SubprocessMode,
+                _preferences.MemoryMode), ShowResourceSettings);
             rows("Приложение RAM (Working Set): " + Mb(appWs), ShowResourceDiagnostics);
             rows("Приложение Private Bytes: " + Mb(appPrivate), ShowResourceDiagnostics);
             rows("Все процессы Working Set*: " + Mb(memory.WorkingSetBytes), ShowResourceDiagnostics);
@@ -156,6 +191,9 @@ internal sealed partial class MainForm
             rows("CEF процессы Working Set*: " + Mb(Math.Max(0, memory.WorkingSetBytes-appWs)), ShowResourceDiagnostics);
             rows("Состояние вкладок на SSD: " + (sessionBytes / 1024.0).ToString("N1") + " КБ", ShowResourceDiagnostics);
             rows("Процессов: " + memory.ProcessCount, ShowResourceDiagnostics);
+            foreach (var (pid, name, working, privateBytes) in topWorkers)
+                rows(name + " #" + pid + ": " + Mb(privateBytes) + " Private / " +
+                    Mb(working) + " WS", ShowResourceDiagnostics);
             rows("Доступно RAM: " + (available >= 0 ? Mb(available) : "нет данных"), ShowResourceDiagnostics);
             rows("Активных CEF: " + _cefRuntimes.Count, ShowResourceDiagnostics);
             rows("Выгружено вкладок: " + unloaded, ShowResourceDiagnostics);

@@ -56,6 +56,23 @@ public static class CoreTests
                 Assert(empty.Tabs[0].CurrentUrl == "https://example.com/",
                     "Lazy startup must not mutate background session tabs");
             });
+            Check("CEF compact subprocess saves memory without losing grouped-mode choice", () =>
+            {
+                Assert(new BrowserPreferences().SubprocessMode == CefSubprocessMode.Automatic,
+                    "Default mode must be adaptive");
+                Assert(CefSubprocessPolicy.Executable(CefSubprocessMode.Automatic, MemoryMode.Extreme) ==
+                    "CefSharp.BrowserSubprocess.exe", "Extreme mode must use lean CEF children");
+                Assert(CefSubprocessPolicy.Executable(CefSubprocessMode.Automatic, MemoryMode.LowMemory) ==
+                    "CefSharp.BrowserSubprocess.exe", "Low Memory mode must use lean CEF children");
+                Assert(CefSubprocessPolicy.Executable(CefSubprocessMode.Automatic, MemoryMode.Balanced) ==
+                    "MBrowser.exe", "Balanced must retain process grouping");
+                Assert(CefSubprocessPolicy.Executable(CefSubprocessMode.Grouped, MemoryMode.Extreme) ==
+                    "MBrowser.exe", "Explicit grouped preference must override Extreme");
+                Assert(CefSubprocessPolicy.Executable(CefSubprocessMode.Compact, MemoryMode.Performance) ==
+                    "CefSharp.BrowserSubprocess.exe", "Manual Compact must override Performance");
+                Assert(CefSubprocessPolicy.Validate((CefSubprocessMode)41) == CefSubprocessMode.Automatic,
+                    "Invalid stored preference must be normalized");
+            });
             Check("CEF video presentation preserves GPU decode and frame counters", () =>
             {
                 Assert(new BrowserPreferences().VideoPresentation == VideoPresentationMode.Compatibility,

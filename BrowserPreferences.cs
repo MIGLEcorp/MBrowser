@@ -7,6 +7,7 @@ internal sealed class BrowserPreferences
 {
     public int UnloadAfterMinutes { get; set; } = 5;
     public MemoryMode MemoryMode { get; set; } = MemoryMode.Balanced;
+    public CefSubprocessMode SubprocessMode { get; set; } = CefSubprocessMode.Automatic;
     public bool HardwareAcceleration { get; set; } = true;
     // Stable keeps D3D11 video decode; Compatibility disables only the DComp presenter.
     public VideoPresentationMode VideoPresentation { get; set; } = VideoPresentationMode.Compatibility;
@@ -46,6 +47,7 @@ internal sealed class BrowserPreferences
                 .Where(host => host is { Length: > 0 and <= 253 } && Uri.CheckHostName(host) != UriHostNameType.Unknown)
                 .Select(host => host.ToLowerInvariant()).Distinct(StringComparer.OrdinalIgnoreCase).Take(128).ToList();
             if (!Enum.IsDefined(settings.MemoryMode)) settings.MemoryMode = MemoryMode.Balanced;
+            settings.SubprocessMode = CefSubprocessPolicy.Validate(settings.SubprocessMode);
             settings.VideoPresentation = CefVideoPolicy.Validate(settings.VideoPresentation);
             settings.NeverHibernateHosts = (settings.NeverHibernateHosts ?? [])
                 .Where(host => host is { Length: > 0 and <= 253 } && Uri.CheckHostName(host) != UriHostNameType.Unknown)

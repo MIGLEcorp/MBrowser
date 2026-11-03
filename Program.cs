@@ -194,6 +194,21 @@ internal static class Program
             if (videoSmoke && Enum.TryParse<VideoPresentationMode>(
                 Environment.GetEnvironmentVariable("MBROWSER_VIDEO_SMOKE_MODE"), true, out var testMode))
                 cefPrefs.VideoPresentation = CefVideoPolicy.Validate(testMode);
+            // Test-only raster-cache profiles; never read on a real user startup.
+            string? rasterBench = cefSmoke ? Environment.GetEnvironmentVariable("MBROWSER_RAM_BENCH_PROFILE") : null;
+            if (rasterBench is "raster" or "all")
+            {
+                cefPrefs.NativeSmallerRasterArea = true;
+                cefPrefs.NativeReclaimTilesWhenIdle = true;
+                cefPrefs.NativeReclaimOldPrepaintTiles = true;
+            }
+            if (rasterBench is "cache" or "all")
+                cefPrefs.NativeCompactDecodedImageCache = true;
+            // Lean CEF child launcher for Low Memory / Extreme unless grouped was selected.
+            string subprocessExe = CefSubprocessPolicy.Executable(cefPrefs.SubprocessMode, cefPrefs.MemoryMode);
+            if (faceDetectionSmoke ||
+                Environment.GetEnvironmentVariable("MBROWSER_LEGACY_CEF_SUBPROCESS") == "1")
+                subprocessExe = "CefSharp.BrowserSubprocess.exe";
             var cefSettings = new CefSharp.WinForms.CefSettings
             {
                 RootCachePath = cefRoot,
@@ -201,14 +216,7 @@ internal static class Program
                 // Self-host workers as MBrowser.exe so Task Manager can identify
                 // them consistently with the parent app. This is not a
                 // single-process switch; normal Chromium isolation remains.
-                BrowserSubprocessPath = Path.Combine(AppContext.BaseDirectory,
-                    // Chromium's experimental WinRT FaceDetector can stall
-                    // under CefSharp SelfHost on this Windows build. Restrict
-                    // the fallback to that smoke mode; real tabs retain the
-                    // normal grouped MBrowser.exe process identity.
-                    faceDetectionSmoke ||
-                    Environment.GetEnvironmentVariable("MBROWSER_LEGACY_CEF_SUBPROCESS") == "1"
-                        ? "CefSharp.BrowserSubprocess.exe" : "MBrowser.exe")
+                BrowserSubprocessPath = Path.Combine(AppContext.BaseDirectory, subprocessExe)
             };
             if (chromeRuntimeSmoke)
                 CefSharp.CefSharpSettings.RuntimeStyle = CefSharp.CefRuntimeStyle.Chrome;
