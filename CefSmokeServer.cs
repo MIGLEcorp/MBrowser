@@ -24,7 +24,7 @@ internal sealed class CefSmokeServer : IDisposable
               + "window.addEventListener('load',()=>{document.documentElement.dataset.memoryAgentAtLoad="
               + "String(!!globalThis.__mbrowser_memory_lab_agent_v1);});</script>"
               + "<script src='/slow.js'></script></head><body><img src='/image.png'>"
-              + "<p>Deferred policy smoke</p></body></html>"
+              + "<main><article>Deferred policy smoke</article><section>Secondary section</section></main></body></html>"
             : faceDetectionPage
             ? "<!doctype html><html><head><title>MBrowser FaceDetector smoke</title></head><body><p>FaceDetector test</p><script>"
               + "(async()=>{const root=document.documentElement;try{if(typeof FaceDetector!=='function'){root.dataset.faceDetectionSmoke='unsupported';return;}"

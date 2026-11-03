@@ -77,7 +77,11 @@ internal sealed partial class MainForm : BrowserWindow
         _tabs.TabClosed += index => RunUi(() => CloseTabAsync(index));
         _tabs.NewTab += () => RunUi(() => OpenTabAsync());
         _home.Navigate += input => RunUi(() => NavigateInputAsync(input));
-        _idleTimer.Tick += (_, _) => RunUi(() => UnloadIdleTabsAsync(DateTimeOffset.UtcNow));
+        _idleTimer.Tick += (_, _) => RunUi(async () =>
+        {
+            await UnloadIdleTabsAsync(DateTimeOffset.UtcNow);
+            await MaintainIdleMemoryAsync(DateTimeOffset.UtcNow);
+        });
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); RunUi(SaveSessionAsync); };
         Resize += (_, _) => { SetMemoryTargets(); DismissPasswordPopup(); };
         Move += (_, _) => DismissPasswordPopup();

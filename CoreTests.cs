@@ -56,6 +56,50 @@ public static class CoreTests
                 Assert(empty.Tabs[0].CurrentUrl == "https://example.com/",
                     "Lazy startup must not mutate background session tabs");
             });
+            Check("Extreme memory mode avoids retaining BackForwardCache documents", () =>
+            {
+                var prefs = new BrowserPreferences();
+                Assert(CefMemoryFeatures.Disabled(prefs) == "", "Balanced mode should keep BFCache");
+                prefs.MemoryMode = MemoryMode.Extreme;
+                Assert(CefMemoryFeatures.Disabled(prefs) == "BackForwardCache",
+                    "Extreme mode should release history page documents");
+                prefs.ReduceHistoryPageCache = false;
+                Assert(CefMemoryFeatures.Disabled(prefs) == "",
+                    "Opt-out must restore Chromium history caching");
+            });
+            Check("Content visibility skips scans and DOM mutations", () =>
+            {
+                var prefs = new BrowserPreferences { ExperimentalContentVisibility = true };
+                string script = ActivePageMemoryController.Script(prefs);
+                Assert(script.Contains("main > article,main > section{"),
+                    "CSS content-visibility selector missing");
+                Assert(!script.Contains("data-mb-content-visibility"),
+                    "Content-visibility should not add attributes to all DOM articles");
+                Assert(script.Contains("if (enabled('images') || enabled('videos')) {"),
+                    "Only media policies should create DOM observers");
+            });
+            Check("V8 memory mode is opt-in and never imposes unsafe hard heap limits", () =>
+            {
+                var prefs = new BrowserPreferences();
+                Assert(prefs.V8MemoryMode == V8MemoryMode.Automatic, "Default should compact V8 only in Extreme");
+                Assert(V8MemoryPolicy.Flags(V8MemoryMode.Standard, MemoryMode.Extreme) == "",
+                    "Standard must never alter V8");
+                Assert(V8MemoryPolicy.Flags(V8MemoryMode.Compact, MemoryMode.Balanced) == "--optimize-for-size",
+                    "Compact should use V8 memory-biased mode");
+                Assert(V8MemoryPolicy.Flags(V8MemoryMode.Automatic, MemoryMode.Balanced) == "" &&
+                    V8MemoryPolicy.Flags(V8MemoryMode.Automatic, MemoryMode.Extreme) == "--optimize-for-size",
+                    "Automatic must be conservative outside Extreme");
+                Assert(V8MemoryPolicy.Validate((V8MemoryMode)99) == V8MemoryMode.Standard,
+                    "Invalid profile values must restore safe defaults");
+                Assert(MemoryMaintenancePolicy.ShouldRun(true, false, false,
+                    TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(10)), "Idle maintenance should activate");
+                Assert(!MemoryMaintenancePolicy.ShouldRun(true, true, false,
+                    TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(10)), "Focused tab must be protected");
+                Assert(!MemoryMaintenancePolicy.ShouldRun(true, false, true,
+                    TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(10)), "Loading tab must be protected");
+                Assert(!MemoryMaintenancePolicy.ShouldRun(false, false, false,
+                    TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(10)), "Opt-out must be respected");
+            });
             Check("CEF compact subprocess saves memory without losing grouped-mode choice", () =>
             {
                 Assert(new BrowserPreferences().SubprocessMode == CefSubprocessMode.Automatic,

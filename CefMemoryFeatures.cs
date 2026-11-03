@@ -36,4 +36,11 @@ internal static class CefMemoryFeatures
 
     internal static string CommandLine(BrowserPreferences preferences, bool customLibCefAvailable) =>
         string.Join(",", Enabled(preferences, customLibCefAvailable));
+
+    // A back-forward cached document keeps its renderer/DOM and memory alive.
+    // Chromium can instead reload a history page on navigation, trading speed
+    // for less retained memory. Never disable site isolation or GPU acceleration.
+    internal static string Disabled(BrowserPreferences preferences) =>
+        preferences.ReduceHistoryPageCache && preferences.MemoryMode == MemoryMode.Extreme
+            ? "BackForwardCache" : "";
 }

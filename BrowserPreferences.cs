@@ -8,11 +8,15 @@ internal sealed class BrowserPreferences
     public int UnloadAfterMinutes { get; set; } = 5;
     public MemoryMode MemoryMode { get; set; } = MemoryMode.Balanced;
     public CefSubprocessMode SubprocessMode { get; set; } = CefSubprocessMode.Automatic;
+    // Auto keeps normal V8 in most modes; Extreme opts into smaller V8 heaps.
+    public V8MemoryMode V8MemoryMode { get; set; } = V8MemoryMode.Automatic;
     public bool HardwareAcceleration { get; set; } = true;
     // Stable keeps D3D11 video decode; Compatibility disables only the DComp presenter.
     public VideoPresentationMode VideoPresentation { get; set; } = VideoPresentationMode.Compatibility;
     public bool ExperimentalChromePasswordManager { get; set; } = false;
     public bool AutomaticHibernate { get; set; } = true;
+    // Drop Blink BackForwardCache entries in Extreme mode, or when explicitly requested.
+    public bool ReduceHistoryPageCache { get; set; } = true;
     // Native start page needs no CEF; delay its native runtime until navigation.
     public bool LazyCefStartup { get; set; } = true;
     // Opt-in active-page/CEF memory features. All default to disabled.
@@ -48,6 +52,7 @@ internal sealed class BrowserPreferences
                 .Select(host => host.ToLowerInvariant()).Distinct(StringComparer.OrdinalIgnoreCase).Take(128).ToList();
             if (!Enum.IsDefined(settings.MemoryMode)) settings.MemoryMode = MemoryMode.Balanced;
             settings.SubprocessMode = CefSubprocessPolicy.Validate(settings.SubprocessMode);
+            settings.V8MemoryMode = V8MemoryPolicy.Validate(settings.V8MemoryMode);
             settings.VideoPresentation = CefVideoPolicy.Validate(settings.VideoPresentation);
             settings.NeverHibernateHosts = (settings.NeverHibernateHosts ?? [])
                 .Where(host => host is { Length: > 0 and <= 253 } && Uri.CheckHostName(host) != UriHostNameType.Unknown)

@@ -19,7 +19,6 @@ internal static class ActivePageMemoryController
   if (globalThis.top !== globalThis.self) return;
   let options = {};
   let lastOptionsSignature = null;
-  let lastVisibilityScan = 0;
   let hadActivePolicies = false;
   let observer = null;
   let scheduled = false;
@@ -27,7 +26,8 @@ internal static class ActivePageMemoryController
   let trackedVideos = new WeakSet();
   const imageMarker = 'data-mb-lazy-added';
   const videoMarker = 'data-mb-preload-added';
-  const contentMarker = 'data-mb-content-visibility';
+  // Applying a CSS rule doesn't require N DOM attributes, repeated document
+  // scans or a MutationObserver: future articles automatically match the rule.
   const styleId = 'mbrowser-memory-lab-content-visibility';
 
   function enabled(name) {
@@ -77,36 +77,32 @@ internal static class ActivePageMemoryController
   }
   function processContents(root) {
     if (!(root instanceof Element)) return;
-    if (root.matches('img')) processImage(root);
-    else if (root.matches('video')) processVideo(root);
-    for (const img of root.querySelectorAll('img')) processImage(img);
-    for (const video of root.querySelectorAll('video')) processVideo(video);
+    // Do not enumerate images or videos if the corresponding policy is off.
+    // Large product feeds can contain tens of thousands of elements.
+    if (enabled('images')) {
+      if (root.matches('img')) processImage(root);
+      for (const img of root.querySelectorAll('img')) processImage(img);
+    }
+    if (enabled('videos')) {
+      if (root.matches('video')) processVideo(root);
+      for (const video of root.querySelectorAll('video')) processVideo(video);
+    }
   }
   function updateContentVisibility() {
-    // Content-heavy sites can mutate the DOM hundreds of times per second.
-    // Repeating a whole-document querySelectorAll each time hurts page loads.
-    if (enabled('contentVisibility') && performance.now() - lastVisibilityScan < 900) return;
-    lastVisibilityScan = performance.now();
-    // Experimental layout skipping: never removes DOM nodes or JavaScript references.
     let style = document.getElementById(styleId);
     if (!enabled('contentVisibility')) {
       if (style) style.remove();
-      document.querySelectorAll('[' + contentMarker + ']').forEach(el => el.removeAttribute(contentMarker));
       return;
     }
     if (!style && document.head) {
       style = document.createElement('style');
       style.id = styleId;
-      style.textContent = 'main > article[' + contentMarker + '],main > section[' + contentMarker +
-          ']{content-visibility:auto;contain-intrinsic-size:auto 700px}';
+      // Selectors match newly inserted elements without modifying the page DOM.
+      // Preserve original targeting of only direct article/section children.
+      style.textContent = 'main > article,main > section{' +
+          'content-visibility:auto;contain-intrinsic-size:auto 700px}';
       document.head.appendChild(style);
     }
-    document.querySelectorAll('main > article,main > section').forEach(el => el.setAttribute(contentMarker, '1'));
-  }
-  function applyDocument() {
-    if (!document.documentElement) return;
-    processContents(document.documentElement);
-    updateContentVisibility();
   }
   const pendingRoots = new Set();
   function schedule(root) {
@@ -118,7 +114,6 @@ internal static class ActivePageMemoryController
       const roots = Array.from(pendingRoots);
       pendingRoots.clear();
       for (const item of roots) if (item.isConnected) processContents(item);
-      if (enabled('contentVisibility')) updateContentVisibility();
     }, 150);
   }
   const api = {
@@ -149,7 +144,8 @@ internal static class ActivePageMemoryController
         trackedVideos = new WeakSet();
       }
       if (observer) observer.disconnect();
-      if (enabled('images') || enabled('videos') || enabled('contentVisibility')) {
+      // CSS-based content visibility needs no observer or recurring DOM scans.
+      if (enabled('images') || enabled('videos')) {
         if (!observer) observer = new MutationObserver(records => {
           for (const record of records) {
             if (record.type === 'attributes' && record.target instanceof Element) schedule(record.target);
@@ -168,7 +164,7 @@ internal static class ActivePageMemoryController
       }
       // Disabling must remove injected CSS immediately, not only on a future mutation.
       updateContentVisibility();
-      if (anyEnabled) schedule(document.documentElement);
+      if (enabled('images') || enabled('videos')) schedule(document.documentElement);
     }
   };
   Object.defineProperty(globalThis, key, {value: api, configurable: false});

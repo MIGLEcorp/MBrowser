@@ -95,6 +95,25 @@ internal sealed partial class MainForm
         };
         content.Controls.Add(subprocessModes);
         TextRow("Compact отключает группировку в диспетчере задач.", 30);
+        TextRow("V8 / JavaScript (эксперимент, после перезапуска):", 36);
+        var v8Modes = new ComboBox
+        {
+            Width = 375, Height = 36, DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor = Palette.Raised, ForeColor = Palette.Text,
+            AccessibleName = "Режим памяти движка JavaScript V8"
+        };
+        v8Modes.Items.AddRange([
+            "V8 Standard — максимальная совместимость",
+            "V8 Compact — экономия JS-памяти, возможны тормоза",
+            "V8 Auto — Compact только в Extreme"
+        ]);
+        v8Modes.SelectedIndex = (int)_preferences.V8MemoryMode;
+        v8Modes.SelectedIndexChanged += (_, _) =>
+        {
+            _preferences.V8MemoryMode = (V8MemoryMode)v8Modes.SelectedIndex;
+            SaveResourcePreferences();
+        };
+        content.Controls.Add(v8Modes);
         TextRow("Время простоя (минуты):");
         var minutes = new NumericUpDown
         {
@@ -118,8 +137,14 @@ internal sealed partial class MainForm
         }
         Toggle("Лёгкий старт: запускать Chromium при первом сайте (после перезапуска)", _preferences.LazyCefStartup,
             value => { _preferences.LazyCefStartup = value; SaveResourcePreferences(); });
+        Toggle("Очищать кэши CEF после 3 мин простоя (эксперимент)",
+            _preferences.CollectJavaScriptGarbageWhenIdle,
+            value => { _preferences.CollectJavaScriptGarbageWhenIdle = value; SaveResourcePreferences(); });
         Toggle("Автоматически выгружать неактивные вкладки", _preferences.AutomaticHibernate,
             value => { _preferences.AutomaticHibernate = value; SaveResourcePreferences(); });
+        Toggle("Extreme: не держать страницы истории в BackForwardCache (перезапуск)",
+            _preferences.ReduceHistoryPageCache,
+            value => { _preferences.ReduceHistoryPageCache = value; SaveResourcePreferences(); });
         Toggle("GPU-ускорение Chromium (использовать VRAM)", _preferences.HardwareAcceleration,
             value => { _preferences.HardwareAcceleration = value; SaveResourcePreferences(); });
         if (Uri.TryCreate(ActiveTab.CurrentUrl, UriKind.Absolute, out var currentUri) &&
@@ -181,6 +206,7 @@ internal sealed partial class MainForm
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         ShowMenuPage("Диагностика ресурсов", rows =>
         {
+            rows("Запросить освобождение кэшей CEF", () => RunUi(ShowManualMemoryReclaimAsync));
             rows("Режим: " + _preferences.MemoryMode, ShowResourceSettings);
             rows("CEF-процессы: " + CefSubprocessPolicy.Executable(_preferences.SubprocessMode,
                 _preferences.MemoryMode), ShowResourceSettings);

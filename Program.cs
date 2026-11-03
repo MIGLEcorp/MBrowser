@@ -99,12 +99,13 @@ internal static class Program
             (args[0] == "--cef-url-smoke" || urlSmokeNoQuic || videoSmoke);
         bool emptyStartupSmoke = args.Length == 1 && args[0] == "--cef-empty-startup-smoke";
         bool lazyNavigationSmoke = args.Length == 1 && args[0] == "--cef-lazy-navigation-smoke";
+        bool memoryPressureSmoke = args.Length == 1 && args[0] == "--cef-memory-pressure-smoke";
         bool faceDetectionSmoke = args.Length == 1 && args[0] == "--cef-face-detection-smoke";
         bool delayedOptimizationSmoke = args.Length == 1 && args[0] == "--cef-delayed-optimization-smoke";
         bool credentialSmoke = args.Length == 1 && args[0] == "--cef-credentials-smoke";
         bool extensionPopupSmoke = args.Length == 1 && args[0] == "--cef-extension-ui-smoke";
         bool extensionSmoke = extensionPopupSmoke || (args.Length == 1 && args[0] == "--cef-extension-smoke");
-        bool cefSmoke = lazyNavigationSmoke || emptyStartupSmoke || chromeRuntimeSmoke || urlSmoke || faceDetectionSmoke ||
+        bool cefSmoke = memoryPressureSmoke || lazyNavigationSmoke || emptyStartupSmoke || chromeRuntimeSmoke || urlSmoke || faceDetectionSmoke ||
             credentialSmoke || delayedOptimizationSmoke || extensionSmoke ||
             (args.Length == 1 && (args[0] == "--cef-smoke" || args[0] == "--smoke-test"));
         {
@@ -147,6 +148,7 @@ internal static class Program
                 // Synthetic profile only; never change the user's preferences.
                 var prefs = BrowserPreferences.Load(dataPathCef);
                 prefs.LazyOffscreenImages = true;
+                prefs.ExperimentalContentVisibility = true;
                 prefs.Save(dataPathCef);
             }
             // The previous profile is migrated and verified before CEF is initialized.
@@ -226,6 +228,17 @@ internal static class Program
                 cefSettings.CefCommandLineArgs["disable-quic"] = "";
             if (!cefPrefs.HardwareAcceleration)
                 cefSettings.CefCommandLineArgs["disable-gpu"] = "";
+            // Compare unmodified V8 and memory-biased V8 on disposable smoke profiles.
+            // The test-only override never changes installed user preferences.
+            string? v8Bench = cefSmoke ? Environment.GetEnvironmentVariable("MBROWSER_V8_BENCH") : null;
+            string v8Flags = v8Bench switch
+            {
+                "compact" => "--optimize-for-size",
+                "standard" => "",
+                _ => V8MemoryPolicy.Flags(cefPrefs.V8MemoryMode, cefPrefs.MemoryMode)
+            };
+            if (v8Flags.Length > 0)
+                cefSettings.CefCommandLineArgs["js-flags"] = v8Flags;
             // Unpacked Chromium extensions: CEF 154 may not expose the full
             // Manifest V3 service-worker API. Do not claim parity without tests.
             string installedExtensions = CefExtensionRegistry.EnabledPaths(dataPathCef);
@@ -237,8 +250,11 @@ internal static class Program
                 .Where(value => value.Length > 0));
             if (enabled.Length > 0)
                 cefSettings.CefCommandLineArgs["enable-features"] = enabled;
-            if (videoPolicy.DisableFeatures.Length > 0)
-                cefSettings.CefCommandLineArgs["disable-features"] = videoPolicy.DisableFeatures;
+            string disabled = string.Join(",", new[] {
+                videoPolicy.DisableFeatures, CefMemoryFeatures.Disabled(cefPrefs)
+            }.Where(value => value.Length > 0));
+            if (disabled.Length > 0)
+                cefSettings.CefCommandLineArgs["disable-features"] = disabled;
             if (cefPrefs.HardwareAcceleration && cefPrefs.VideoPresentation == VideoPresentationMode.Stable)
                 cefSettings.CefCommandLineArgs[CefVideoPolicy.DisableOverlaysSwitch] = "";
             if (videoPolicy.DisableDirectComposition)
@@ -327,7 +343,7 @@ internal static class Program
                 cefForm.Shown += (_, _) =>
                 {
                     var timer = new System.Windows.Forms.Timer
-                    { Interval = emptyStartupSmoke ? 3000 : lazyNavigationSmoke ? 18000 : faceDetectionSmoke ? 20000 : videoSmoke ? 6500 : urlSmoke ? 30000 : 9000 };
+                    { Interval = emptyStartupSmoke ? 3000 : lazyNavigationSmoke ? 18000 : memoryPressureSmoke ? 14000 : faceDetectionSmoke ? 20000 : videoSmoke ? 6500 : urlSmoke ? 30000 : 9000 };
                     timer.Tick += async (_, _) =>
                     {
                         timer.Stop();
@@ -351,6 +367,22 @@ internal static class Program
                             if (videoSmoke)
                                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "cef-video-smoke.json"),
                                     videoReport);
+                            var pressureBefore = memoryPressureSmoke ? cefForm.ReadMemory() : default;
+                            bool pressureOk = !memoryPressureSmoke ||
+                                await cefForm.TryMemoryPressureForSmokeAsync();
+                            if (memoryPressureSmoke)
+                            {
+                                await Task.Delay(2000);
+                                var pressureAfter = cefForm.ReadMemory();
+                                File.WriteAllText(Path.Combine(dataPathCef, "cef-memory-pressure-smoke.json"),
+                                    System.Text.Json.JsonSerializer.Serialize(new {
+                                        Applied = pressureOk,
+                                        BeforePrivateMiB = Math.Round(pressureBefore.PrivateBytes / 1048576d, 2),
+                                        AfterPrivateMiB = Math.Round(pressureAfter.PrivateBytes / 1048576d, 2),
+                                        BeforeWorkingSetMiB = Math.Round(pressureBefore.WorkingSetBytes / 1048576d, 2),
+                                        AfterWorkingSetMiB = Math.Round(pressureAfter.WorkingSetBytes / 1048576d, 2)
+                                    }));
+                            }
                             var info = cefForm.CefDiagnosticsForTest();
                             File.WriteAllText(Path.Combine(dataPathCef, "cef-smoke.txt"),
                                 "CEF_WINDOW_SHOWN=" + cefForm.IsHandleCreated +
@@ -388,6 +420,7 @@ internal static class Program
                                     footprint.ProcessCount == 1 ? 0 : 1;
                             }
                             else smokeExitCode = (!info.BrowserInitialized || !agent || !deferredOptimizationOk ||
+                                !pressureOk ||
                                 (lazyNavigationSmoke && !cefInitialized) ||
                                 (extensionSmoke && (!mv3 || !mv3Worker)) ||
                                 (extensionPopupSmoke && !popupReady) ||

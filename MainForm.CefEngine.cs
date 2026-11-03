@@ -410,7 +410,9 @@ internal sealed partial class MainForm
                 "JSON.stringify({parse:document.documentElement.dataset.memoryAgentAtParse," +
                 "load:document.documentElement.dataset.memoryAgentAtLoad," +
                 "slow:globalThis.__mbrowserSlowResourceFinished===true," +
-                "active:typeof globalThis.__mbrowser_memory_lab_agent_v1?.configure==='function'})");
+                "active:typeof globalThis.__mbrowser_memory_lab_agent_v1?.configure==='function'," +
+                "css:!!document.getElementById('mbrowser-memory-lab-content-visibility')," +
+                "marked:document.querySelectorAll('[data-mb-content-visibility]').length})");
             if (!result.Success || result.Result is not string json)
                 return false;
             using var document = JsonDocument.Parse(json);
@@ -418,7 +420,9 @@ internal sealed partial class MainForm
             bool good = root.GetProperty("parse").GetString() == "false" &&
                 root.GetProperty("load").GetString() == "false" &&
                 root.GetProperty("slow").GetBoolean() &&
-                root.GetProperty("active").GetBoolean();
+                root.GetProperty("active").GetBoolean() &&
+                root.GetProperty("css").GetBoolean() &&
+                root.GetProperty("marked").GetInt32() == 0;
             File.WriteAllText(Path.Combine(DataPath, "cef-deferred-optimizations.txt"), json);
             return good;
         }
@@ -622,6 +626,7 @@ internal sealed partial class MainForm
             else
                 rows("Компактный кэш изображений: нужен свой libcef (ещё нет)", () => { });
             rows("Запрошенные флаги: " + CefMemoryFeatures.CommandLine(_preferences, _cefCustomLibCef), () => { });
+            rows("Отключённые функции: " + CefMemoryFeatures.Disabled(_preferences), () => { });
             rows("Применить: перезапусти MBrowser", () => { });
         });
     }
