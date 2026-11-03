@@ -1,11 +1,11 @@
-#define AppVersion "4.4.3"
+#define AppVersion "4.4.4"
 [Setup]
 AppId={{B4E6167D-3A9C-41E6-A0A2-9176BEDDAC12}
 AppName=MBrowser
 MinVersion=10.0.19041
 AppMutex={code:GetAppMutex}
 AppVersion={#AppVersion}
-AppVerName=MBrowser 4.4.3 - True OLED and video stability
+AppVerName=MBrowser 4.4.4 - low RAM startup and video stability
 AppPublisher=MIGLEcorp
 AppPublisherURL=https://github.com/MIGLEcorp/MBrowser
 DefaultDirName={localappdata}\Programs\MBrowser

@@ -30,6 +30,32 @@ public static class CoreTests
         {
             ThemeTests.RunCore(Check, folder);
             BrowserIntegrationTests.RunCore(Check,folder);
+            Check("CEF memory-first shell and on-demand runtime preserve real navigations", () =>
+            {
+                var empty = new AppSession();
+                Assert(new BrowserPreferences().LazyCefStartup, "Lazy engine startup must be on by default");
+                Assert(!CefStartupPolicy.InitializeBeforeWindow(true, false),
+                    "Default profile must show the shell before initializing native Chromium");
+                Assert(CefStartupPolicy.InitializeBeforeWindow(false, false),
+                    "Fast-start opt-out must restore eager Chromium initialization");
+                Assert(!CefStartupPolicy.InitializeBeforeWindow(false, true),
+                    "Empty smoke test must never start Chromium before its checks");
+                Assert(!CefStartupPolicy.NeedsEngineAtLaunch(empty, [], false),
+                    "Default blank homepage should not load CEF");
+                Assert(CefStartupPolicy.NeedsEngineAtLaunch(empty, ["https://example.com/"], false),
+                    "Command line navigations must initialize CEF");
+                Assert(CefStartupPolicy.NeedsEngineAtLaunch(empty, [], true),
+                    "Standard smoke tests must initialize CEF");
+                empty.Tabs[0].Visit("https://example.com/");
+                Assert(CefStartupPolicy.NeedsEngineAtLaunch(empty, [], false),
+                    "Restored page must initialize CEF");
+                empty.Tabs.Add(new BrowserTab());
+                empty.SelectedIndex = 1;
+                Assert(!CefStartupPolicy.NeedsEngineAtLaunch(empty, [], false),
+                    "Native homepage should defer CEF even if older tabs exist");
+                Assert(empty.Tabs[0].CurrentUrl == "https://example.com/",
+                    "Lazy startup must not mutate background session tabs");
+            });
             Check("CEF video presentation preserves GPU decode and frame counters", () =>
             {
                 Assert(new BrowserPreferences().VideoPresentation == VideoPresentationMode.Compatibility,

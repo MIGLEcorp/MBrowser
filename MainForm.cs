@@ -26,6 +26,7 @@ internal sealed partial class MainForm : BrowserWindow
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _closing;
     private readonly bool _smoke;
+    private readonly Action _ensureCefInitialized;
     private GlassPanel? _menu;
 
     internal string DataPath { get; }
@@ -37,8 +38,9 @@ internal sealed partial class MainForm : BrowserWindow
     internal bool HasLoadingTabs => _cefRuntimes.Values.Any(r => r.Loading);
 
     public MainForm(string dataPath, bool smoke, string[]? initialTargets = null,
-        bool cefEngine = false, bool customCef = false)
+        bool cefEngine = false, bool customCef = false, Action? ensureCefInitialized = null)
     {
+        _ensureCefInitialized = ensureCefInitialized ?? (() => { });
         _cefEngine = true;
         _cefCustomLibCef = customCef;
         DataPath = dataPath;

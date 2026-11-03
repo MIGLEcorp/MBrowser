@@ -97,12 +97,14 @@ internal static class Program
         bool videoSmoke = args.Length == 2 && args[0] == "--cef-video-smoke";
         bool urlSmoke = args.Length == 2 &&
             (args[0] == "--cef-url-smoke" || urlSmokeNoQuic || videoSmoke);
+        bool emptyStartupSmoke = args.Length == 1 && args[0] == "--cef-empty-startup-smoke";
+        bool lazyNavigationSmoke = args.Length == 1 && args[0] == "--cef-lazy-navigation-smoke";
         bool faceDetectionSmoke = args.Length == 1 && args[0] == "--cef-face-detection-smoke";
         bool delayedOptimizationSmoke = args.Length == 1 && args[0] == "--cef-delayed-optimization-smoke";
         bool credentialSmoke = args.Length == 1 && args[0] == "--cef-credentials-smoke";
         bool extensionPopupSmoke = args.Length == 1 && args[0] == "--cef-extension-ui-smoke";
         bool extensionSmoke = extensionPopupSmoke || (args.Length == 1 && args[0] == "--cef-extension-smoke");
-        bool cefSmoke = chromeRuntimeSmoke || urlSmoke || faceDetectionSmoke ||
+        bool cefSmoke = lazyNavigationSmoke || emptyStartupSmoke || chromeRuntimeSmoke || urlSmoke || faceDetectionSmoke ||
             credentialSmoke || delayedOptimizationSmoke || extensionSmoke ||
             (args.Length == 1 && (args[0] == "--cef-smoke" || args[0] == "--smoke-test"));
         {
@@ -113,7 +115,7 @@ internal static class Program
                     ? Path.Combine(AppContext.BaseDirectory, "TestProfile")
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "MBrowser");
-            using var cefSmokeServer = cefSmoke && !urlSmoke
+            using var cefSmokeServer = cefSmoke && !urlSmoke && !emptyStartupSmoke
                 ? new CefSmokeServer(credentialSmoke, faceDetectionSmoke, delayedOptimizationSmoke) : null;
             string[] targets;
             if (urlSmoke)
@@ -121,6 +123,7 @@ internal static class Program
                 if (!AddressParser.TryWebUrl(args[1], out string smokeUrl)) return 2;
                 targets = [smokeUrl];
             }
+            else if (emptyStartupSmoke || lazyNavigationSmoke) targets = [];
             else if (cefSmoke) targets = [cefSmokeServer!.Url];
             else targets = BrowserDocuments.ParseArguments(args.Length > 0 && args[0] == "--cef"
                 ? args.Skip(1).ToArray() : args);
@@ -233,8 +236,13 @@ internal static class Program
             if (videoPolicy.DisableDirectComposition)
                 cefSettings.CefCommandLineArgs["disable-direct-composition"] = "";
             // A cold CEF process can be slow while Windows verifies native DLLs.
-            // Show real startup status before the synchronous native load.
-            using var startup = cefSmoke ? null : new Form
+            // The local initializer can be called at startup or from the first
+            // real navigation. The native-only homepage never starts Chromium.
+            bool cefInitialized = false;
+            void EnsureCefInitialized()
+            {
+                if (cefInitialized) return;
+                using var startup = cefSmoke ? null : new Form
             {
                 Text = "MBrowser · запуск Chromium",
                 Width = 420, Height = 145, StartPosition = FormStartPosition.CenterScreen,
@@ -275,10 +283,19 @@ internal static class Program
                     { LogError(dataPathCef, error); }
                 }
             }
-            finally { startup?.Close(); }
+                finally { startup?.Close(); }
+                cefInitialized = true;
+            }
+            // Initialize CEF from the visible UI on the first actual page, including
+            // restored/command-line pages. This avoids native bootstrap deadlocks
+            // before WinForms has a message loop and never delays the native homepage.
+            // Turning off LazyCefStartup restores the original eager startup.
+            bool immediateCef = CefStartupPolicy.InitializeBeforeWindow(
+                cefPrefs.LazyCefStartup, emptyStartupSmoke || lazyNavigationSmoke);
+            if (immediateCef) EnsureCefInitialized();
             Application.ThreadException += (_, e) => LogError(dataPathCef, e.Exception);
             using var cefForm = new MainForm(dataPathCef, cefSmoke, targets,
-                cefEngine: true, customCef: customCef);
+                cefEngine: true, customCef: customCef, ensureCefInitialized: EnsureCefInitialized);
             _ = cefForm.Handle;
             using var cefActivation = cefSmoke || isolatedInstall ? null : new BrowserActivation(incoming =>
             {
@@ -292,17 +309,24 @@ internal static class Program
             int smokeExitCode = 1;
             if (cefSmoke)
             {
+                if (lazyNavigationSmoke)
+                    cefForm.Shown += async (_, _) =>
+                    {
+                        await Task.Delay(750);
+                        try { await cefForm.NavigateInputAsync(cefSmokeServer!.Url); }
+                        catch (Exception error) { LogError(dataPathCef, error); }
+                    };
                 cefForm.Shown += (_, _) =>
                 {
                     var timer = new System.Windows.Forms.Timer
-                    { Interval = faceDetectionSmoke ? 20000 : videoSmoke ? 6500 : urlSmoke ? 30000 : 9000 };
+                    { Interval = emptyStartupSmoke ? 3000 : lazyNavigationSmoke ? 18000 : faceDetectionSmoke ? 20000 : videoSmoke ? 6500 : urlSmoke ? 30000 : 9000 };
                     timer.Tick += async (_, _) =>
                     {
                         timer.Stop();
                         timer.Dispose();
                         try
                         {
-                            bool agent = await cefForm.CefMemoryAgentReadyForTestAsync();
+                            bool agent = emptyStartupSmoke || await cefForm.CefMemoryAgentReadyForTestAsync();
                             bool deferredOptimizationOk = !delayedOptimizationSmoke ||
                                 await cefForm.CefDelayedOptimizationReadyForTestAsync();
                             bool mv3 = extensionSmoke && await cefForm.CefExtensionSmokeReadyForTestAsync();
@@ -322,6 +346,8 @@ internal static class Program
                             var info = cefForm.CefDiagnosticsForTest();
                             File.WriteAllText(Path.Combine(dataPathCef, "cef-smoke.txt"),
                                 "CEF_WINDOW_SHOWN=" + cefForm.IsHandleCreated +
+                                Environment.NewLine + "CEF_EMPTY_STARTUP=" + emptyStartupSmoke +
+                                Environment.NewLine + "CEF_INITIALIZED=" + cefInitialized +
                                 Environment.NewLine + "ACTIVE_URL=" + cefForm.ActiveTab.CurrentUrl +
                                 Environment.NewLine + "CEF_RENDERER_INITIALIZED=" + info.BrowserInitialized +
                                 Environment.NewLine + "CEF_RENDERER_ADDRESS=" + info.Address
@@ -340,7 +366,21 @@ internal static class Program
                                 Environment.NewLine + "CEF_LOGIN_BRIDGE_DIAGNOSTICS=" + (credentialSmoke ? await cefForm.CefCredentialDiagnosticsForTestAsync() : "not tested") +
                                 Environment.NewLine + "CEF_LIVE_VIEWS=" + cefForm.LiveViewCount +
                                 Environment.NewLine + "CEF_GROUP_PROCESSES=" + cefForm.ReadMemory().ProcessCount);
-                            smokeExitCode = (!info.BrowserInitialized || !agent || !deferredOptimizationOk ||
+                            if (emptyStartupSmoke)
+                            {
+                                var footprint = cefForm.ReadMemory();
+                                string result = System.Text.Json.JsonSerializer.Serialize(new {
+                                    CefInitialized = cefInitialized, CefViews = cefForm.LiveViewCount,
+                                    ProcessCount = footprint.ProcessCount,
+                                    WorkingSetMiB = Math.Round(footprint.WorkingSetBytes / 1048576d, 2),
+                                    PrivateMiB = Math.Round(footprint.PrivateBytes / 1048576d, 2)
+                                });
+                                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "cef-empty-startup-smoke.json"), result);
+                                smokeExitCode = !cefInitialized && cefForm.LiveViewCount == 0 &&
+                                    footprint.ProcessCount == 1 ? 0 : 1;
+                            }
+                            else smokeExitCode = (!info.BrowserInitialized || !agent || !deferredOptimizationOk ||
+                                (lazyNavigationSmoke && !cefInitialized) ||
                                 (extensionSmoke && (!mv3 || !mv3Worker)) ||
                                 (extensionPopupSmoke && !popupReady) ||
                                 (credentialSmoke && cefForm.CefLoginBridgeMessagesForTest == 0) ||

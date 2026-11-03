@@ -39,7 +39,9 @@ internal sealed partial class MainForm
 
     private CefTabRuntime CreateCefView(BrowserTab tab)
     {
-        // Initialization is performed on the main UI thread in Program.Main.
+        // Delayed until the first real tab on a native-only homepage. This runs
+        // on the WinForms UI thread before any ChromiumWebBrowser is constructed.
+        _ensureCefInitialized();
         var browser = new ChromiumWebBrowser(tab.CurrentUrl ?? "about:blank")
         {
             Dock = DockStyle.Fill,

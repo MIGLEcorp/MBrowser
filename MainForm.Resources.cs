@@ -96,6 +96,8 @@ internal sealed partial class MainForm
             content.Controls.Add(control);
             return control;
         }
+        Toggle("Лёгкий старт: запускать Chromium при первом сайте (после перезапуска)", _preferences.LazyCefStartup,
+            value => { _preferences.LazyCefStartup = value; SaveResourcePreferences(); });
         Toggle("Автоматически выгружать неактивные вкладки", _preferences.AutomaticHibernate,
             value => { _preferences.AutomaticHibernate = value; SaveResourcePreferences(); });
         Toggle("GPU-ускорение Chromium (использовать VRAM)", _preferences.HardwareAcceleration,

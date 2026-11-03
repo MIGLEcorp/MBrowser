@@ -12,6 +12,8 @@ internal sealed class BrowserPreferences
     public VideoPresentationMode VideoPresentation { get; set; } = VideoPresentationMode.Compatibility;
     public bool ExperimentalChromePasswordManager { get; set; } = false;
     public bool AutomaticHibernate { get; set; } = true;
+    // Native start page needs no CEF; delay its native runtime until navigation.
+    public bool LazyCefStartup { get; set; } = true;
     // Opt-in active-page/CEF memory features. All default to disabled.
     public bool LazyOffscreenImages { get; set; }
     public bool DeferOffscreenVideo { get; set; }
