@@ -1,0 +1,85 @@
+diff --git a/cc/base/features.cc b/cc/base/features.cc
+index 1edb9a6f05..87d524304c 100644
+--- a/cc/base/features.cc
++++ b/cc/base/features.cc
+@@ -53,6 +53,8 @@ BASE_FEATURE(kUseDMSAAForTiles,
+ #endif
+ );
+ 
++BASE_FEATURE(kMBrowserCompactDecodedImageCache, base::FEATURE_DISABLED_BY_DEFAULT);
++
+ BASE_FEATURE(kReclaimPrepaintTilesWhenIdle, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ // This saves memory on all platforms, but while on Android savings are
+diff --git a/cc/base/features.h b/cc/base/features.h
+index 73c7b65b44..7d1a649536 100644
+--- a/cc/base/features.h
++++ b/cc/base/features.h
+@@ -27,6 +27,9 @@ CC_BASE_EXPORT extern const base::FeatureParam<int>
+ // Use DMSAA instead of MSAA for rastering tiles.
+ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kUseDMSAAForTiles);
+ 
++// MBrowser: opt-in policy retaining fewer unused decoded image entries.
++CC_BASE_EXPORT BASE_DECLARE_FEATURE(kMBrowserCompactDecodedImageCache);
++
+ // When no frames are produced in a certain time interval, reclaim prepaint
+ // tiles.
+ CC_BASE_EXPORT BASE_DECLARE_FEATURE(kReclaimPrepaintTilesWhenIdle);
+diff --git a/cc/tiles/gpu_image_decode_cache.cc b/cc/tiles/gpu_image_decode_cache.cc
+index e2a2f0d93e..b07e3f29f0 100644
+--- a/cc/tiles/gpu_image_decode_cache.cc
++++ b/cc/tiles/gpu_image_decode_cache.cc
+@@ -1884,7 +1884,11 @@ bool GpuImageDecodeCache::ExceedsCacheLimits() const {
+   if (aggressively_freeing_resources_) {
+     items_limit = kSuspendedMaxItemsInCacheForGpu;
+   } else {
+-    items_limit = kNormalMaxItemsInCacheForGpu;
++    // Entries still referenced or locked by rendering cannot be removed.
++    items_limit = base::FeatureList::IsEnabled(
++                      features::kMBrowserCompactDecodedImageCache)
++                      ? 256
++                      : kNormalMaxItemsInCacheForGpu;
+   }
+ 
+   return persistent_cache_.size() > items_limit;
+diff --git a/cc/tiles/software_image_decode_cache.cc b/cc/tiles/software_image_decode_cache.cc
+index 8a34ac5e0d..e97e8e2abb 100644
+--- a/cc/tiles/software_image_decode_cache.cc
++++ b/cc/tiles/software_image_decode_cache.cc
+@@ -11,6 +11,7 @@
+ #include <string>
+ #include <utility>
+ 
++#include "base/feature_list.h"
+ #include "base/format_macros.h"
+ #include "base/functional/bind.h"
+ #include "base/memory/raw_ptr.h"
+@@ -21,6 +22,7 @@
+ #include "base/task/single_thread_task_runner.h"
+ #include "base/trace_event/memory_dump_manager.h"
+ #include "cc/base/devtools_instrumentation.h"
++#include "cc/base/features.h"
+ #include "cc/base/histograms.h"
+ #include "cc/raster/tile_task.h"
+ #include "cc/tiles/mipmap_util.h"
+@@ -157,7 +159,10 @@ SoftwareImageDecodeCache::SoftwareImageDecodeCache(
+       locked_images_budget_(locked_memory_limit_bytes),
+       color_type_(color_type),
+       generator_client_id_(PaintImage::GetNextGeneratorClientId()),
+-      max_items_in_cache_(kNormalMaxItemsInCacheForSoftware) {
++      max_items_in_cache_(base::FeatureList::IsEnabled(
++                              features::kMBrowserCompactDecodedImageCache)
++                              ? 128
++                              : kNormalMaxItemsInCacheForSoftware) {
+   DCHECK_NE(generator_client_id_, PaintImage::kDefaultGeneratorClientId);
+   // In certain cases, SingleThreadTaskRunner::CurrentDefaultHandle isn't set
+   // (Android Webview).  Don't register a dump provider in these cases.
+@@ -731,7 +736,7 @@ size_t SoftwareImageDecodeCache::GetNumCacheEntriesForTesting() {
+   return decoded_images_.size();
+ }
+ size_t SoftwareImageDecodeCache::GetMaxNumCacheEntriesForTesting() {
+-  return kNormalMaxItemsInCacheForSoftware;
++  return max_items_in_cache_;
+ }
+ 
+ SkColorType SoftwareImageDecodeCache::GetColorTypeForPaintImage(
