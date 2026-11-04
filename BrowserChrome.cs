@@ -138,11 +138,25 @@ internal sealed class TabStrip : Control
         return Math.Clamp(first, 0, lastStart);
     }
 
+    internal static int FirstVisibleAfterResize(int total, int selected, int capacity, int first)
+    {
+        // As space grows, slide the strip left instead of keeping the old
+        // scroll offset while the currently selected tab remains visible.
+        if (selected >= 0 && selected < total)
+            first = Math.Min(first, Math.Max(0, selected - Math.Max(1, capacity) + 1));
+        return FirstVisibleForLayout(total, selected, capacity, first);
+    }
+
     internal int VisibleStartForTest => _firstVisible;
     internal int VisibleCountForTest => Math.Min(Capacity, Math.Max(0, Tabs.Count - _firstVisible));
     internal bool HasOverflowForTest => HasOverflow;
     internal int PaintedTabCountForTest => _hits.Count;
     internal bool PaintedOverflowArrowsForTest => !_previous.IsEmpty && !_next.IsEmpty;
+    internal bool PaintedControlsFitForTest =>
+        _hits.All(h => h.Bounds.Left >= 0 && h.Bounds.Right <= ClientSize.Width) &&
+        (_plus.IsEmpty || _plus.Right <= ClientSize.Width) &&
+        (_previous.IsEmpty || _previous.Right <= ClientSize.Width) &&
+        (_next.IsEmpty || _next.Right <= ClientSize.Width);
 
     public void RevealSelected()
     {
@@ -151,7 +165,16 @@ internal sealed class TabStrip : Control
         Invalidate();
     }
 
-    protected override void OnResize(EventArgs e) { base.OnResize(e); RevealSelected(); }
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        // Hit targets from the previous geometry must not remain clickable
+        // while WinForms is asynchronously painting a resized window.
+        _hits.Clear();
+        _plus = _previous = _next = Rectangle.Empty;
+        _firstVisible = FirstVisibleAfterResize(Tabs.Count, SelectedIndex, Capacity, _firstVisible);
+        RevealSelected();
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -159,6 +182,7 @@ internal sealed class TabStrip : Control
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         _hits.Clear();
+        _firstVisible = FirstVisibleForLayout(Tabs.Count, SelectedIndex, Capacity, _firstVisible);
         int count = Math.Min(Capacity, Math.Max(0, Tabs.Count - _firstVisible));
         int width = Math.Min(220, Math.Max(100, (Width - 116) / Math.Max(1, count)));
         for (int slot = 0; slot < count; slot++)

@@ -66,9 +66,11 @@ internal sealed partial class MainForm
     internal Task GoBackAsync() => TransitionAsync(async () =>
     {
         await LeaveSiteFullscreenAsync();
-        if (TryCefBack()) { ActiveTab.Back(); RefreshChrome(); return; }
+        if (TryCefBack()) { ActiveTab.Back(); ActiveTab.ScrollX = ActiveTab.ScrollY = 0;
+            RefreshChrome(); return; }
         if (!ActiveTab.CanGoBack) return;
         ActiveTab.Back();
+        ActiveTab.ScrollX = ActiveTab.ScrollY = 0;
         DestroyCefView(ActiveTab.Id);
         await ShowCefActiveTabAsync();
     });
@@ -76,9 +78,11 @@ internal sealed partial class MainForm
     internal Task GoForwardAsync() => TransitionAsync(async () =>
     {
         await LeaveSiteFullscreenAsync();
-        if (TryCefForward()) { ActiveTab.Forward(); RefreshChrome(); return; }
+        if (TryCefForward()) { ActiveTab.Forward(); ActiveTab.ScrollX = ActiveTab.ScrollY = 0;
+            RefreshChrome(); return; }
         if (!ActiveTab.CanGoForward) return;
         ActiveTab.Forward();
+        ActiveTab.ScrollX = ActiveTab.ScrollY = 0;
         DestroyCefView(ActiveTab.Id);
         await ShowCefActiveTabAsync();
     });

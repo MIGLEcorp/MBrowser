@@ -1,5 +1,14 @@
 # MBrowser 4
 
+## MBrowser 4.4.7 — navigation, scroll and tab resize fixes
+
+- **Scroll**: pages opened by navigation no longer reuse the previous URL's saved scroll coordinates. For a hibernated/restored page, MBrowser restores its saved position exactly once and only when the restored document URL matches. Native Chromium back/forward scrolling is preserved.
+- **Tab strip resizing**: when a window grows, previously hidden tabs are progressively revealed; clickable regions are invalidated on resize so old coordinates cannot capture clicks. The geometry is exercised at 820, 1180, 1720, 2800 and 5120 pixels.
+- **AniLiberty media diagnostics**: an isolated CEF test of the supplied video page reported H.264 = no, AAC = no, VP9 = probably. The page provides HLS streams via cache.libria.fun; this CEF build cannot play AVC/AAC. Video settings now include a codec diagnostic and a user-initiated *open current page in system browser* fallback. No attempts to bypass DRM or disable site security.
+- Proprietary codec support requires a separate native CEF build and validation; it is **not** present in this 4.4.7 package. The native GN graph has been generated to experiment with \`proprietary_codecs=true\` and \`ffmpeg_branding="Chrome"\` using an unchanged-user-profile isolated build. Distribution must be checked for applicable codec licenses.
+- Known limitations: the initial external site's availability/CDN can vary. This release does not claim to solve every video playback problem.
+
+
 ## MBrowser 4.4.6 — экономия активной вкладки и тестируемая очистка
 
 - Добавлен **экспериментальный V8 Compact**: штатный флаг V8 `--optimize-for-size` в настройках «Память и GPU»; возможна потеря скорости JavaScript. По умолчанию **Standard**; также есть Auto (Compact только в Extreme). A/B пока недостаточно устойчив, поэтому экономия не заявляется как подтверждённая.

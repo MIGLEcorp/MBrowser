@@ -31,6 +31,31 @@ internal sealed partial class MainForm
 })()
 """;
 
+    internal async Task<string> CefMediaCapabilitiesForTestAsync()
+    {
+        if (!_cefRuntimes.TryGetValue(ActiveTab.Id, out var runtime) ||
+            !CefIsAlive(runtime) || !runtime.View.CanExecuteJavascriptInMainFrame)
+            return "no-main-frame";
+        const string script = "(() => {const v=document.createElement('video');" +
+            "const mse=globalThis.MediaSource;" +
+            "const types=['video/mp4; codecs=\"avc1.42E01E\"','audio/mp4; codecs=\"mp4a.40.2\"'," +
+            "'video/webm; codecs=\"vp9\"'];" +
+            "const codecs=types.map(type=>({type,canPlay:v.canPlayType(type)||'no'," +
+            "mse:!!mse?.isTypeSupported?.(type)}));" +
+            "const resources=performance.getEntriesByType('resource');" +
+            "return JSON.stringify({host:location.hostname,codecs,videoCount:document.querySelectorAll('video').length," +
+            "iframeCount:document.querySelectorAll('iframe').length," +
+            "hlsRequests:resources.filter(x=>/\\.m3u8(?:\\?|$)/i.test(x.name)).length," +
+            "mediaErrors:[...document.querySelectorAll('video')].map(x=>x.error?.code||0)});})()";
+        try
+        {
+            var result = await runtime.View.EvaluateScriptAsync(script);
+            return result.Success && result.Result is string json ? json : "evaluation-failed";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        { Program.LogError(DataPath, ex); return "evaluation-error"; }
+    }
+
     private void ShowVideoSettings()
     {
         ShowMenuPage("Видео · GPU", rows =>
@@ -48,8 +73,49 @@ internal sealed partial class MainForm
             rows("GPU-ускорение: " + (_preferences.HardwareAcceleration ? "ВКЛ" : "ВЫКЛ"), ShowResourceSettings);
             rows("Диагностика воспроизведения (3 сек.)", () => RunUi(ShowVideoDiagnosticsAsync));
             rows("Замерять на вкладке с запущенным видео", () => { });
+            rows("Проверить поддержку H.264 / AAC / VP9", () =>
+                RunUi(ShowMediaCodecDiagnosticsAsync));
+            rows("Если видео недоступно — открыть страницу в системном браузере",
+                OpenCurrentPageInSystemBrowser);
             rows("Изменение режима требует перезапуска браузера", () => { });
         });
+    }
+
+    private async Task ShowMediaCodecDiagnosticsAsync()
+    {
+        string result = await CefMediaCapabilitiesForTestAsync();
+        ShowMenuPage("Поддержка видеокодеков", rows =>
+        {
+            if (result.StartsWith("{", StringComparison.Ordinal))
+            {
+                using var json = JsonDocument.Parse(result);
+                if (json.RootElement.TryGetProperty("codecs", out var codecs))
+                    foreach (var codec in codecs.EnumerateArray())
+                    {
+                        string type = codec.GetProperty("type").GetString() ?? "unknown";
+                        string status = codec.GetProperty("canPlay").GetString() ?? "no";
+                        string mse = codec.GetProperty("mse").GetBoolean() ? "да" : "нет";
+                        rows(type + ": " + status + " · MSE: " + mse, () => { });
+                    }
+            }
+            else rows("Диагностика недоступна: " + result, () => { });
+            rows("Открыть страницу в системном браузере", OpenCurrentPageInSystemBrowser);
+        });
+    }
+
+    private void OpenCurrentPageInSystemBrowser()
+    {
+        if (!AddressParser.TryWebUrl(ActiveTab.CurrentUrl ?? "", out var url)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or
+            InvalidOperationException)
+        { ShowError(error); }
     }
 
     private void SetVideoMode(VideoPresentationMode mode)
@@ -102,6 +168,7 @@ internal sealed partial class MainForm
             {
                 rows("В этой вкладке нет доступного HTML5-видео.", () => { });
                 rows("Видео может находиться внутри отдельного iframe.", () => { });
+                rows("Открыть страницу в системном браузере", OpenCurrentPageInSystemBrowser);
                 rows("Открыть настройки видеовывода", ShowVideoSettings);
             });
             return;

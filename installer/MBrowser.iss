@@ -1,11 +1,11 @@
-#define AppVersion "4.4.6"
+#define AppVersion "4.4.7"
 [Setup]
 AppId={{B4E6167D-3A9C-41E6-A0A2-9176BEDDAC12}
 AppName=MBrowser
 MinVersion=10.0.19041
 AppMutex={code:GetAppMutex}
 AppVersion={#AppVersion}
-AppVerName=MBrowser 4.4.6 - active-page RAM optimizations
+AppVerName=MBrowser 4.4.7 - active-page RAM optimizations
 AppPublisher=MIGLEcorp
 AppPublisherURL=https://github.com/MIGLEcorp/MBrowser
 DefaultDirName={localappdata}\Programs\MBrowser

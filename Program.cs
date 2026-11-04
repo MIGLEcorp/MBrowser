@@ -367,6 +367,9 @@ internal static class Program
                             if (videoSmoke)
                                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "cef-video-smoke.json"),
                                     videoReport);
+                            if (urlSmoke)
+                                File.WriteAllText(Path.Combine(dataPathCef, "cef-media-capabilities.json"),
+                                    await cefForm.CefMediaCapabilitiesForTestAsync());
                             var pressureBefore = memoryPressureSmoke ? cefForm.ReadMemory() : default;
                             bool pressureOk = !memoryPressureSmoke ||
                                 await cefForm.TryMemoryPressureForSmokeAsync();

@@ -214,6 +214,47 @@ public static class CoreTests
                 Assert(!strip.HasOverflowForTest && strip.VisibleStartForTest == 0 &&
                     strip.VisibleCountForTest == 2, "Closing tabs left hidden entries");
             });
+            Check("Scroll restore is only used for a discarded document, never another URL", () =>
+            {
+                const string old = "https://example.com/first";
+                Assert(CefScrollPolicy.ShouldRestore(true, old, old, 0, 920),
+                    "Previously discarded tab should restore its scroll");
+                Assert(!CefScrollPolicy.ShouldRestore(true, old,
+                    "https://example.com/second", 0, 920),
+                    "Navigating to another document must start from its own scroll state");
+                Assert(!CefScrollPolicy.ShouldRestore(false, old, old, 0, 920),
+                    "Live tabs must let Chromium restore their own position");
+                Assert(!CefScrollPolicy.ShouldRestore(true, old, old, 0, 0),
+                    "Zero scroll must not trigger page injection");
+                Assert(CefScrollPolicy.RestoreScript(0, 920).Contains("scrollTo(x,y)"),
+                    "Discarded-page restore script is missing");
+            });
+            Check("Tab strip progressively reflows on window resizing", () =>
+            {
+                const int total = 20, last = 19;
+                int startSmall = TabStrip.FirstVisibleAfterResize(total, last, 4, 16);
+                int startMedium = TabStrip.FirstVisibleAfterResize(total, last, 8, startSmall);
+                int startLarge = TabStrip.FirstVisibleAfterResize(total, last, 12, startMedium);
+                Assert(startSmall == 16 && startMedium == 12 && startLarge == 8,
+                    "Tab strip did not reveal earlier tabs on partial expansion");
+                using var strip = new TabStrip
+                {
+                    Width = 820,
+                    Tabs = Enumerable.Range(0, total).Select(i => new BrowserTab
+                    {
+                        Title = "Tab " + i
+                    }).ToArray(),
+                    SelectedIndex = last
+                };
+                foreach (int width in new[] { 820, 1180, 1720, 2800, 5120, 1180, 820 })
+                {
+                    strip.Width = width;
+                    using var rendered = new Bitmap(strip.Width, strip.Height);
+                    strip.DrawToBitmap(rendered, new Rectangle(Point.Empty, strip.Size));
+                    Assert(strip.PaintedControlsFitForTest,
+                        "Tab buttons or arrows escaped after resizing to " + width);
+                }
+            });
             Check("CEF unpacked extension IDs match Chromium path identity", () =>
             {
                 string a = Path.Combine(folder, "cef-ext-a"), b = Path.Combine(folder, "cef-ext-b");

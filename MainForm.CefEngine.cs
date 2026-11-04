@@ -24,6 +24,9 @@ internal sealed partial class MainForm
         internal int OptimizationsScheduledEpoch = -1;
         internal int OptimizationsAppliedEpoch = -1;
         internal bool Loading { get; set; }
+        internal bool RestoreScrollOnFirstLoad { get; set; } =
+            tab.ScrollX > 0 || tab.ScrollY > 0;
+        internal string? RestoreScrollUrl { get; } = tab.CurrentUrl;
         internal string MemoryAgentScript { get; set; } = "";
         internal DateTimeOffset LastUsedUtc { get; set; } = DateTimeOffset.UtcNow;
         internal DateTimeOffset? LoadStartedUtc { get; set; } = DateTimeOffset.UtcNow;
@@ -114,7 +117,13 @@ internal sealed partial class MainForm
             if (!string.Equals(e.Address, "about:blank", StringComparison.OrdinalIgnoreCase) &&
                 AddressParser.TryWebUrl(e.Address, out string resolved))
             {
-                if (tab.CurrentUrl != resolved) tab.Visit(resolved);
+                if (tab.CurrentUrl != resolved)
+                {
+                    // A new URL must never replay the position of the old page.
+                    tab.Visit(resolved);
+                    tab.ScrollX = tab.ScrollY = 0;
+                    runtime.RestoreScrollOnFirstLoad = false;
+                }
             }
             if (tab == ActiveTab) RefreshChrome();
             else _tabs.Invalidate();
@@ -156,8 +165,16 @@ internal sealed partial class MainForm
                     // Login and edit safety are independent of memory policies.
                     e.Frame.ExecuteJavaScriptAsync(AutofillPageScripts.CefObserver);
                     e.Frame.ExecuteJavaScriptAsync(TabHibernationManager.ActivityTrackerScript);
-                    if (tab.ScrollX > 0 || tab.ScrollY > 0)
-                        e.Frame.ExecuteJavaScriptAsync("scrollTo(" + tab.ScrollX.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + tab.ScrollY.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")");
+                    if (runtime.RestoreScrollOnFirstLoad)
+                    {
+                        runtime.RestoreScrollOnFirstLoad = false;
+                        // Live tabs/history are handled by Chromium. Only a discarded
+                        // document with the same URL gets the saved coordinates.
+                        if (CefScrollPolicy.ShouldRestore(true, runtime.RestoreScrollUrl,
+                                e.Frame.Url, tab.ScrollX, tab.ScrollY))
+                            e.Frame.ExecuteJavaScriptAsync(
+                                CefScrollPolicy.RestoreScript(tab.ScrollX, tab.ScrollY));
+                    }
                 },
                 error => Program.LogError(DataPath, error)))
                 return;
@@ -508,6 +525,8 @@ internal sealed partial class MainForm
     {
         if (!_cefEngine || !_cefRuntimes.TryGetValue(ActiveTab.Id, out var runtime) ||
             !CefIsAlive(runtime)) return false;
+        runtime.RestoreScrollOnFirstLoad = false;
+        runtime.Tab.ScrollX = runtime.Tab.ScrollY = 0;
         runtime.View.LoadUrl(url);
         return true;
     }
