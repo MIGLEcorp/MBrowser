@@ -99,13 +99,15 @@ internal static class Program
             (args[0] == "--cef-url-smoke" || urlSmokeNoQuic || videoSmoke);
         bool emptyStartupSmoke = args.Length == 1 && args[0] == "--cef-empty-startup-smoke";
         bool lazyNavigationSmoke = args.Length == 1 && args[0] == "--cef-lazy-navigation-smoke";
+        bool findSmoke = args.Length == 1 && args[0] == "--cef-find-smoke";
+        bool downloadSmoke = args.Length == 1 && args[0] == "--cef-download-smoke";
         bool memoryPressureSmoke = args.Length == 1 && args[0] == "--cef-memory-pressure-smoke";
         bool faceDetectionSmoke = args.Length == 1 && args[0] == "--cef-face-detection-smoke";
         bool delayedOptimizationSmoke = args.Length == 1 && args[0] == "--cef-delayed-optimization-smoke";
         bool credentialSmoke = args.Length == 1 && args[0] == "--cef-credentials-smoke";
         bool extensionPopupSmoke = args.Length == 1 && args[0] == "--cef-extension-ui-smoke";
         bool extensionSmoke = extensionPopupSmoke || (args.Length == 1 && args[0] == "--cef-extension-smoke");
-        bool cefSmoke = memoryPressureSmoke || lazyNavigationSmoke || emptyStartupSmoke || chromeRuntimeSmoke || urlSmoke || faceDetectionSmoke ||
+        bool cefSmoke = downloadSmoke || findSmoke || memoryPressureSmoke || lazyNavigationSmoke || emptyStartupSmoke || chromeRuntimeSmoke || urlSmoke || faceDetectionSmoke ||
             credentialSmoke || delayedOptimizationSmoke || extensionSmoke ||
             (args.Length == 1 && (args[0] == "--cef-smoke" || args[0] == "--smoke-test"));
         {
@@ -117,7 +119,8 @@ internal static class Program
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "MBrowser");
             using var cefSmokeServer = cefSmoke && !urlSmoke && !emptyStartupSmoke
-                ? new CefSmokeServer(credentialSmoke, faceDetectionSmoke, delayedOptimizationSmoke) : null;
+                ? new CefSmokeServer(credentialSmoke, faceDetectionSmoke,
+                    delayedOptimizationSmoke, downloadSmoke) : null;
             string[] targets;
             if (urlSmoke)
             {
@@ -351,6 +354,13 @@ internal static class Program
                         try
                         {
                             bool agent = emptyStartupSmoke || await cefForm.CefMemoryAgentReadyForTestAsync();
+                            bool findOk = !findSmoke || await cefForm.CefFindSmokeForTestAsync();
+                            if (downloadSmoke)
+                            {
+                                cefForm.CefClickDownloadSmokeLinkForTest();
+                                await Task.Delay(2200);
+                            }
+                            bool downloadOk = !downloadSmoke || cefForm.CefDownloadCompletedForTest();
                             bool deferredOptimizationOk = !delayedOptimizationSmoke ||
                                 await cefForm.CefDelayedOptimizationReadyForTestAsync();
                             bool mv3 = extensionSmoke && await cefForm.CefExtensionSmokeReadyForTestAsync();
@@ -397,6 +407,8 @@ internal static class Program
                                 + Environment.NewLine + "CEF_URL_SMOKE=" + urlSmoke +
                                 Environment.NewLine + "CEF_FACE_DETECTION_RESULT=" + faceDetectionResult +
                                 Environment.NewLine + "CEF_MEMORY_AGENT_LOADED=" + agent +
+                                Environment.NewLine + "CEF_FIND_UI_OK=" + findOk +
+                                Environment.NewLine + "CEF_DOWNLOAD_UI_OK=" + downloadOk +
                                 Environment.NewLine + "CEF_OPTIMIZATION_DEFERRED_OK=" + deferredOptimizationOk +
                                 Environment.NewLine + "CEF_MV3_CONTENT_SCRIPT_LOADED=" + mv3 +
                                 Environment.NewLine + "CEF_MV3_WORKER_MESSAGE_OK=" + mv3Worker +
@@ -422,7 +434,7 @@ internal static class Program
                                 smokeExitCode = !cefInitialized && cefForm.LiveViewCount == 0 &&
                                     footprint.ProcessCount == 1 ? 0 : 1;
                             }
-                            else smokeExitCode = (!info.BrowserInitialized || !agent || !deferredOptimizationOk ||
+                            else smokeExitCode = (!info.BrowserInitialized || !agent || !findOk || !downloadOk || !deferredOptimizationOk ||
                                 !pressureOk ||
                                 (lazyNavigationSmoke && !cefInitialized) ||
                                 (extensionSmoke && (!mv3 || !mv3Worker)) ||

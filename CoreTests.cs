@@ -214,6 +214,39 @@ public static class CoreTests
                 Assert(!strip.HasOverflowForTest && strip.VisibleStartForTest == 0 &&
                     strip.VisibleCountForTest == 2, "Closing tabs left hidden entries");
             });
+            Check("Download manager formats sizes, progress, speed and ETA", () =>
+            {
+                Assert(DownloadUiPolicy.FormatSize(0) == "0 Б", "Empty transfer should show zero bytes");
+                Assert(DownloadUiPolicy.FormatSize(1048576) == "1.0 МБ", "MiB formatting failed");
+                Assert(DownloadUiPolicy.FormatSpeed(1048576) == "1.0 МБ/с", "Speed formatting failed");
+                Assert(DownloadUiPolicy.FormatSpeed(0) == "—", "Unknown speed must be explicit");
+                Assert(DownloadUiPolicy.Percentage(8, 10) == 80 &&
+                    DownloadUiPolicy.Percentage(1, 0) == 0,
+                    "Progress must handle known and unknown totals");
+                Assert(DownloadUiPolicy.FormatTimeRemaining(0, 10485760, 1048576) == "10 сек",
+                    "Time-remaining estimate failed");
+                Assert(DownloadUiPolicy.FormatTimeRemaining(0, 0, 200) == "—",
+                    "Unknown total should not invent an ETA");
+                Assert(!new BrowserPreferences().AskWhereToSaveDownloads,
+                    "Ordinary downloads should not prompt for every file");
+            });
+            Check("Downloads never overwrite a file with the same name", () =>
+            {
+                string downloads = Path.Combine(folder, "download-policy");
+                Directory.CreateDirectory(downloads);
+                string existing = Path.Combine(downloads, "video.mp4");
+                File.WriteAllText(existing, "keep this file");
+                string chosen = DownloadUiPolicy.UniqueDownloadPath(downloads, "video.mp4", []);
+                Assert(chosen == Path.Combine(downloads, "video (1).mp4"),
+                    "Existing files must be preserved");
+                string next = DownloadUiPolicy.UniqueDownloadPath(downloads, "video.mp4", [chosen]);
+                Assert(next == Path.Combine(downloads, "video (2).mp4"),
+                    "Concurrent files must receive different paths");
+                Assert(DownloadUiPolicy.UniqueDownloadPath(downloads, "CON.txt", []) ==
+                    Path.Combine(downloads, "download-CON.txt"),
+                    "Windows reserved filenames must not be used");
+                Assert(File.ReadAllText(existing) == "keep this file", "Download path test overwrote input");
+            });
             Check("Scroll restore is only used for a discarded document, never another URL", () =>
             {
                 const string old = "https://example.com/first";

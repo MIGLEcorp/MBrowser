@@ -51,6 +51,7 @@ internal sealed partial class MainForm
             AccessibleName = "Chromium Embedded Framework page"
         };
         browser.DownloadHandler = new CefDownloadsHandler(this, tab.Id);
+        browser.FindHandler = new CefPageFindHandler(this, tab.Id);
         browser.PermissionHandler = new CefPermissionsHandler(this, tab.Id);
         var navigationHandler = new CefNavigationHandler(this, tab);
         browser.RequestHandler = navigationHandler;
@@ -336,6 +337,7 @@ internal sealed partial class MainForm
 
     private Task ShowCefActiveTabAsync()
     {
+        if (_findPanel is not null && _findTabId != ActiveTab.Id) CloseFindBar();
         CloseOverlay();
         DismissPasswordPopup();
         foreach (var runtime in _cefRuntimes.Values)

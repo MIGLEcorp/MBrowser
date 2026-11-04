@@ -10,6 +10,11 @@ internal sealed partial class MainForm
     internal void CloseOverlay()
     {
         var overlay = _overlay;
+        if (ReferenceEquals(overlay, _downloadsPanel))
+        {
+            _downloadsPanel = null;
+            _downloadsRows = null;
+        }
         _overlay = null;
         _menu = null;
         if (overlay is null) return;

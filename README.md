@@ -1,5 +1,16 @@
 # MBrowser 4
 
+## MBrowser 4.4.8 — native find bar and downloads
+
+- **Ctrl+F**: a native Chromium CEF find-in-page panel above the page, showing match count and current position, next/previous buttons, case-sensitive toggle and shortcuts Enter / Shift+Enter / F3 / Shift+F3 / Escape. Uses the CEF Find/StopFinding API rather than injecting custom DOM search code.
+- **Downloads icon** on the right of the address bar (before bookmarks/menu); click or press Ctrl+J for a compact downloads panel. Shows file name, actual received/total size, percentage, Chromium-reported bytes per second, estimated remaining time when known, status, progress bar, Pause/Resume/Cancel and Open/Show in folder.
+- By default files save to Windows Downloads automatically; optional "Ask where to save" preference is in the panel. Collision-safe filenames do not overwrite existing files.
+- Keeps recent completed download history (max 120 items, only local path/name/size/timestamp, no source URLs) across restarts. Users can clear completed records without deleting actual files.
+- Test profiles save their downloaded files inside the isolated temp profile, not in the user's real Downloads folder.
+- The same verified Chromium runtime is used as 4.4.7. Codec-enabled libcef native compilation is a separate experiment and not included in this release.
+- Tests cover native CEF find events, real local file download, formatting, unique filename handling and main UI startup. Pausing very large real-world network downloads still depends on server resume support.
+
+
 ## MBrowser 4.4.7 — navigation, scroll and tab resize fixes
 
 - **Scroll**: pages opened by navigation no longer reuse the previous URL's saved scroll coordinates. For a hibernated/restored page, MBrowser restores its saved position exactly once and only when the restored document URL matches. Native Chromium back/forward scrolling is preserved.

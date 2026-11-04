@@ -22,6 +22,7 @@ internal sealed partial class MainForm
         Action? action = keys switch
         {
             Keys.F10 => ShowMainMenu,
+            Keys.Escape when _findPanel is not null => CloseFindBar,
             Keys.Escape when _overlay is not null => CloseOverlay,
             Keys.Control | Keys.L => FocusAddress,
             Keys.Alt | Keys.D => FocusAddress,
@@ -35,6 +36,9 @@ internal sealed partial class MainForm
             Keys.Alt | Keys.Home => () => RunUi(HomeAsync),
             Keys.F5 => () => RunUi(ReloadAsync),
             Keys.Control | Keys.R => () => RunUi(ReloadAsync),
+            Keys.Control | Keys.F => ShowFindBar,
+            Keys.F3 => () => FindNext(true),
+            Keys.Shift | Keys.F3 => () => FindNext(false),
             Keys.Control | Keys.J => ShowDownloads,
             Keys.Control | Keys.D => ShowBookmarks,
             Keys.Control | Keys.Shift | Keys.B => ShowBookmarks,

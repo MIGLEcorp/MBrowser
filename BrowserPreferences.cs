@@ -33,6 +33,8 @@ internal sealed class BrowserPreferences
     public bool NativeReclaimOldPrepaintTiles { get; set; }
     public List<string> NeverOptimizeHosts { get; set; } = [];
     public List<string> NeverHibernateHosts { get; set; } = [];
+    // Match regular browsers: downloads go to Downloads unless Save As is enabled.
+    public bool AskWhereToSaveDownloads { get; set; } = false;
     public bool NetworkSuggestions { get; set; } = true;
     public string ImageOcrLanguage { get; set; } = "en-US";
     public string ImageTargetLanguage { get; set; } = "ru";

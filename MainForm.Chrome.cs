@@ -8,10 +8,11 @@ internal sealed partial class MainForm
     {
         var toolbar = _toolbar;
         toolbar.Dock = DockStyle.Top; toolbar.Height = 58; toolbar.Padding = new Padding(10);
-        toolbar.ColumnCount = 7; toolbar.RowCount = 1; toolbar.BackColor = Palette.Surface;
+        toolbar.ColumnCount = 8; toolbar.RowCount = 1; toolbar.BackColor = Palette.Surface;
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         for (int i = 0; i < 4; i++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
         _back.Click += (_, _) => RunUi(GoBackAsync);
@@ -43,12 +44,18 @@ internal sealed partial class MainForm
         go.Click += (_, _) => RunUi(() => NavigateInputAsync(_address.Text));
         addressBox.SetTrailingButton(go);
         _tips.SetToolTip(go, go.AccessibleName);
+        _downloadsButton = (RoundedButton)Palette.Button("↓", "Загрузки (Ctrl+J)", 44);
+        _downloadsButton.Font = new Font("Segoe UI", 15, FontStyle.Bold);
+        _downloadsButton.Click += (_, _) => ShowDownloads();
+        toolbar.Controls.Add(_downloadsButton, 5, 0);
+        _tips.SetToolTip(_downloadsButton, "Загрузки · Ctrl+J");
+        InitializeDownloadsToolbar();
         var bookmark = Palette.IconButton("Bookmark", "☆", "Закладки (Ctrl+D)");
         bookmark.Click += (_, _) => ShowBookmarks();
-        toolbar.Controls.Add(bookmark, 5, 0);
+        toolbar.Controls.Add(bookmark, 6, 0);
         var menu = Palette.IconButton("Menu", "☰", "Меню");
         menu.Click += (_, _) => ShowMainMenu();
-        toolbar.Controls.Add(menu, 6, 0);
+        toolbar.Controls.Add(menu, 7, 0);
         foreach (Control control in toolbar.Controls) if (control is Button) control.BackColor = Color.Transparent;
         _viewport.Controls.Add(_home);
         Controls.Add(_viewport);

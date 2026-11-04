@@ -11,13 +11,20 @@ internal sealed class CefSmokeServer : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly byte[] _response;
     private readonly bool _delayedOptimizationPage;
+    private readonly bool _downloadPage;
     internal string Url { get; }
 
     internal CefSmokeServer(bool loginPage = false, bool faceDetectionPage = false,
-        bool delayedOptimizationPage = false)
+        bool delayedOptimizationPage = false, bool downloadPage = false)
     {
         _delayedOptimizationPage = delayedOptimizationPage;
-        string html = delayedOptimizationPage
+        _downloadPage = downloadPage;
+        string html = downloadPage
+            ? "<!doctype html><html><head><title>MBrowser download smoke</title></head><body>" +
+              "<a id='file' href='/test.bin' download='mbrowser-test.bin'>Download</a>" +
+              "<script>setTimeout(()=>document.getElementById('file').click(),700)</script>" +
+              "</body></html>"
+            : delayedOptimizationPage
             ? "<!doctype html><html><head><title>Deferred optimization smoke</title>"
               + "<script>document.documentElement.dataset.memoryAgentAtParse="
               + "String(!!globalThis.__mbrowser_memory_lab_agent_v1);"
@@ -72,7 +79,17 @@ internal sealed class CefSmokeServer : IDisposable
                 int received = await stream.ReadAsync(request, _stop.Token);
                 if (received == 0) return;
                 string line = Encoding.ASCII.GetString(request, 0, received);
-                if (_delayedOptimizationPage && line.StartsWith("GET /slow.js ", StringComparison.Ordinal))
+                if (_downloadPage && line.StartsWith("GET /test.bin ", StringComparison.Ordinal))
+                {
+                    byte[] bytes = Enumerable.Repeat((byte)0x39, 262144).ToArray();
+                    byte[] header = Encoding.ASCII.GetBytes(
+                        $"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n" +
+                        $"Content-Disposition: attachment; filename=mbrowser-test.bin\r\n" +
+                        $"Content-Length: {bytes.Length}\r\nConnection: close\r\n\r\n");
+                    await stream.WriteAsync(header, _stop.Token);
+                    await stream.WriteAsync(bytes, _stop.Token);
+                }
+                else if (_delayedOptimizationPage && line.StartsWith("GET /slow.js ", StringComparison.Ordinal))
                 {
                     await Task.Delay(1800, _stop.Token);
                     byte[] jsBody = Encoding.UTF8.GetBytes("window.__mbrowserSlowResourceFinished=true;");

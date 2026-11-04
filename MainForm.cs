@@ -46,6 +46,7 @@ internal sealed partial class MainForm : BrowserWindow
         DataPath = dataPath;
         _smoke = smoke;
         _preferences = BrowserPreferences.Load(dataPath);
+        LoadCefDownloadHistory();
         _cefStartupFeatures = cefEngine ? CefMemoryFeatures.CommandLine(_preferences, customCef) : "";
         ThemeSettings.Load(dataPath);
         _session = SessionStore.Load(Path.Combine(dataPath, "session.json"));
@@ -83,7 +84,7 @@ internal sealed partial class MainForm : BrowserWindow
             await MaintainIdleMemoryAsync(DateTimeOffset.UtcNow);
         });
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); RunUi(SaveSessionAsync); };
-        Resize += (_, _) => { SetMemoryTargets(); DismissPasswordPopup(); };
+        Resize += (_, _) => { SetMemoryTargets(); DismissPasswordPopup(); PositionFindBar(); };
         Move += (_, _) => DismissPasswordPopup();
         Deactivate += (_, _) => { _inactiveSinceUtc = DateTimeOffset.UtcNow; DismissPasswordPopup(); ThemeMedia.SetActive(false); };
         Activated += (_, _) => { ResumeActivePage(); ThemeMedia.SetActive(true); };
@@ -214,6 +215,11 @@ internal sealed partial class MainForm : BrowserWindow
         {
             _closing = true;
             DismissPasswordPopup();
+            CloseFindBar();
+            _findDebounce.Dispose();
+            _downloadUiTimer.Stop();
+            _downloadUiTimer.Dispose();
+            _cefDownloadCallbacks.Clear();
             _idleTimer.Dispose();
             _saveTimer.Dispose();
             _tips.Dispose();
